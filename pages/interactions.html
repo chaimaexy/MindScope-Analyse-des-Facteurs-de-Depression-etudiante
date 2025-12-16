@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>MindScope – Exploration</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+
+<header>
+    <h1>MindScope</h1>
+    <nav>
+        <a href="../index.html">Accueil</a>
+        <a href="exploration.html">Exploration</a>
+        <a href="profiling.html">Profiling</a>
+        <a href="multidim.html">Multidimensionnel</a>
+        <a href="interactions.html">Interactions</a>
+        <a href="outliers.html">Outliers</a>
+        <a href="comparaison.html">Comparaison</a>
+    </nav>
+</header>
+
+<main>
+
+    <section>
+        <h2>Objectif de l’analyse</h2>
+        <p>
+            Cette page permet d’explorer les facteurs de risque et de protection
+            associés à la dépression chez les étudiants à partir de visualisations interactives.
+        </p>
+    </section>
+
+    <section>
+        <h2>Filtres</h2>
+        <p class="muted">
+            Ces filtres permettent d’explorer des sous-groupes spécifiques d’étudiants.
+        </p>
+
+        <div class="filters">
+            <!-- futurs select / sliders -->
+        </div>
+    </section>
+
+    <section>
+        <h2>Visualisation principale</h2>
+        <svg id="main-chart"></svg>
+    </section>
+
+    <section>
+        <h2>Analyse complémentaire</h2>
+        <svg id="secondary-chart"></svg>
+    </section>
+
+</main>
+
+<footer>
+    <p>MindScope – Analyse de la dépression étudiante</p>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>
