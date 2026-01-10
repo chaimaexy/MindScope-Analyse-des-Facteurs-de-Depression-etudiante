@@ -1,207 +1,137 @@
-// js/charts/smallMultiples.js - Version corrigée
+// js/charts/smallMultiples.js - VERSION SIMPLIFIÉE POUR TEST
 
-const CLUSTER_COLORS = ['#4E79A7', '#F28E2C', '#E15759', '#76B7B2', '#59A14F'];
+const SMALL_MULTIPLES_COLORS = ['#4E79A7', '#F28E2C', '#E15759', '#76B7B2', '#59A14F'];
 
 function createSmallMultiples(container, data, clusters, variable) {
+    console.log('=== DEBUG CREATE SMALL MULTIPLES ===');
+    console.log('Container:', container);
+    console.log('Données reçues:', data?.length || 0);
+    console.log('Clusters reçus:', clusters?.length || 0);
+    console.log('Variable:', variable);
+    
+    // Vérifier que le conteneur existe
     const containerElement = document.querySelector(container);
+    console.log('Élément conteneur trouvé:', !!containerElement);
+    console.log('Dimensions conteneur:', containerElement?.clientWidth, 'x', containerElement?.clientHeight);
+    
     if (!containerElement) {
         console.error('Conteneur non trouvé:', container);
         return;
     }
     
-    const width = containerElement.clientWidth;
-    const height = containerElement.clientHeight;
-    
     // Nettoyer le conteneur
     d3.select(container).selectAll('*').remove();
     
     // Vérifier les données
-    if (!data || data.length === 0 || !clusters || clusters.length === 0) {
-        d3.select(container)
-            .append('div')
-            .style('text-align', 'center')
-            .style('padding', '40px')
-            .style('color', '#666')
-            .text('Aucune donnée disponible pour les distributions');
+    if (!data || data.length === 0) {
+        console.error('Pas de données!');
+        showErrorMessage(container, 'Aucune donnée disponible');
         return;
     }
     
-    // Calculer les dimensions
-    const numClusters = clusters.length;
-    const cols = Math.ceil(Math.sqrt(numClusters));
-    const rows = Math.ceil(numClusters / cols);
-    const chartWidth = Math.max(100, (width - 40) / cols);
-    const chartHeight = Math.max(100, (height - 40) / rows);
-    
-    // Créer le SVG
-    const svg = d3.select(container)
-        .append('svg')
-        .attr('width', width)
-        .attr('height', height)
-        .append('g')
-        .attr('transform', 'translate(20, 40)');
-    
-    // Créer les sous-graphiques
-    for (let i = 0; i < numClusters; i++) {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        const x = col * chartWidth;
-        const y = row * chartHeight;
-        
-        const clusterGroup = svg.append('g')
-            .attr('transform', `translate(${x}, ${y})`);
-        
-        // Extraire les données du cluster
-        const clusterData = clusters[i] || [];
-        
-        // Vérifier si le cluster a des données
-        if (clusterData.length === 0) {
-            clusterGroup.append('text')
-                .attr('x', chartWidth / 2)
-                .attr('y', chartHeight / 2)
-                .attr('text-anchor', 'middle')
-                .style('fill', '#666')
-                .text(`Cluster ${i + 1}\nAucune donnée`);
-            continue;
-        }
-        
-        // Extraire les valeurs pour la variable
-        const values = clusterData
-            .map(d => {
-                const val = d[variable];
-                // Convertir en nombre, retourner 0 si invalide
-                if (val === undefined || val === null) return 0;
-                const num = parseFloat(val);
-                return isNaN(num) ? 0 : num;
-            })
-            .filter(v => !isNaN(v));
-        
-        // Vérifier s'il y a des valeurs
-        if (values.length === 0) {
-            clusterGroup.append('text')
-                .attr('x', chartWidth / 2)
-                .attr('y', chartHeight / 2)
-                .attr('text-anchor', 'middle')
-                .style('fill', '#666')
-                .text(`Cluster ${i + 1}\nDonnées manquantes`);
-            continue;
-        }
-        
-        // Calculer les statistiques avec vérification
-        const mean = values.length > 0 ? d3.mean(values) : 0;
-        const median = values.length > 0 ? d3.median(values) : 0;
-        const std = values.length > 0 ? d3.deviation(values) : 0;
-        const min = values.length > 0 ? d3.min(values) : 0;
-        const max = values.length > 0 ? d3.max(values) : 0;
-        
-        // S'assurer que les valeurs sont valides
-        const safeMin = isNaN(min) ? 0 : min;
-        const safeMax = isNaN(max) || max === safeMin ? safeMin + 1 : max;
-        
-        // Échelles
-        const xScale = d3.scaleLinear()
-            .domain([safeMin, safeMax])
-            .range([0, chartWidth - 40]);
-        
-        // Histogramme
-        const histogram = d3.bin()
-            .domain(xScale.domain())
-            .thresholds(10)(values);
-        
-        // Trouver la hauteur maximale
-        const maxCount = d3.max(histogram, d => d.length) || 1;
-        const yScale = d3.scaleLinear()
-            .domain([0, maxCount])
-            .range([chartHeight - 60, 0]);
-        
-        // Dessiner l'histogramme
-        clusterGroup.selectAll('.bar')
-            .data(histogram)
-            .enter()
-            .append('rect')
-            .attr('class', 'bar')
-            .attr('x', d => xScale(d.x0))
-            .attr('y', d => yScale(d.length))
-            .attr('width', d => Math.max(1, xScale(d.x1) - xScale(d.x0) - 2))
-            .attr('height', d => yScale(0) - yScale(d.length))
-            .attr('fill', CLUSTER_COLORS[i % CLUSTER_COLORS.length])
-            .attr('opacity', 0.6);
-        
-        // Ligne de la moyenne
-        if (!isNaN(mean)) {
-            clusterGroup.append('line')
-                .attr('class', 'mean-line')
-                .attr('x1', xScale(mean))
-                .attr('x2', xScale(mean))
-                .attr('y1', yScale(0))
-                .attr('y2', yScale(maxCount))
-                .attr('stroke', '#dc2626')
-                .attr('stroke-width', 2)
-                .attr('stroke-dasharray', '4,4');
-        }
-        
-        // Titre du cluster
-        clusterGroup.append('text')
-            .attr('class', 'cluster-title')
-            .attr('x', 0)
-            .attr('y', -15)
-            .style('font-size', '11px')
-            .style('font-weight', '600')
-            .text(`Cluster ${i + 1} (n=${clusterData.length})`);
-        
-        // Statistiques
-        const stats = [
-            { label: 'Moyenne', value: mean },
-            { label: 'Médiane', value: median },
-            { label: 'Écart-type', value: std },
-            { label: 'Min', value: min },
-            { label: 'Max', value: max }
-        ];
-        
-        // Afficher les statistiques
-        stats.forEach((stat, index) => {
-            const value = typeof stat.value === 'number' && !isNaN(stat.value) 
-                ? stat.value.toFixed(2) 
-                : 'N/A';
-            
-            clusterGroup.append('text')
-                .attr('x', chartWidth - 10)
-                .attr('y', 15 + index * 12)
-                .attr('text-anchor', 'end')
-                .style('font-size', '9px')
-                .style('fill', '#64748b')
-                .text(`${stat.label}: ${value}`);
-        });
-        
-        // Axe X simple
-        clusterGroup.append('line')
-            .attr('x1', 0)
-            .attr('x2', chartWidth - 40)
-            .attr('y1', yScale(0))
-            .attr('y2', yScale(0))
-            .attr('stroke', '#ccc')
-            .attr('stroke-width', 1);
+    if (!clusters || clusters.length === 0) {
+        console.error('Pas de clusters!');
+        showErrorMessage(container, 'Aucun cluster disponible');
+        return;
     }
     
-    // Titre global
+    // Créer un message de test simple
+    const testMessage = `
+        <div style="text-align: center; padding: 40px;">
+            <h3 style="color: #4f46e5;">Test Small Multiples</h3>
+            <p>Données: ${data.length} étudiants</p>
+            <p>Clusters: ${clusters.length}</p>
+            <p>Variable: ${variable}</p>
+            <p>Dimensions: ${containerElement.clientWidth} x ${containerElement.clientHeight}</p>
+            <div style="margin-top: 20px; color: #16a34a;">
+                ✅ Le script fonctionne!
+            </div>
+        </div>
+    `;
+    
+    d3.select(container)
+        .append('div')
+        .html(testMessage);
+    
+    // Créer un SVG simple pour tester
+    const svg = d3.select(container)
+        .append('svg')
+        .attr('width', containerElement.clientWidth)
+        .attr('height', 300)
+        .style('background', '#f8fafc');
+    
+    // Ajouter un titre
     svg.append('text')
-        .attr('x', (width - 40) / 2)
-        .attr('y', -20)
+        .attr('x', containerElement.clientWidth / 2)
+        .attr('y', 30)
         .attr('text-anchor', 'middle')
-        .style('font-size', '14px')
-        .style('font-weight', '600')
-        .text(`Distribution de ${getVariableLabel(variable)} par Cluster`);
+        .style('font-size', '16px')
+        .style('font-weight', 'bold')
+        .text('Small Multiples - Version Test');
+    
+    // Afficher quelques statistiques
+    const numClusters = clusters.length;
+    const yStart = 80;
+    
+    clusters.forEach((cluster, i) => {
+        const x = 50 + (i * 150);
+        const y = yStart;
+        
+        // Carré de couleur pour le cluster
+        svg.append('rect')
+            .attr('x', x)
+            .attr('y', y)
+            .attr('width', 20)
+            .attr('height', 20)
+            .attr('fill', SMALL_MULTIPLES_COLORS[i % SMALL_MULTIPLES_COLORS.length]);
+        
+        // Nom du cluster
+        svg.append('text')
+            .attr('x', x + 25)
+            .attr('y', y + 15)
+            .style('font-size', '12px')
+            .text(`Cluster ${i + 1}`);
+        
+        // Taille du cluster
+        svg.append('text')
+            .attr('x', x)
+            .attr('y', y + 50)
+            .style('font-size', '11px')
+            .style('fill', '#666')
+            .text(`${cluster.length} étudiants`);
+        
+        // Valeur moyenne si disponible
+        if (cluster.length > 0) {
+            const values = cluster.map(d => d[variable]).filter(v => v !== undefined);
+            if (values.length > 0) {
+                const avg = d3.mean(values);
+                svg.append('text')
+                    .attr('x', x)
+                    .attr('y', y + 70)
+                    .style('font-size', '11px')
+                    .style('fill', '#dc2626')
+                    .text(`Avg: ${avg?.toFixed(1) || 'N/A'}`);
+            }
+        }
+    });
+    
+    console.log('✅ Small multiples test créé avec succès');
 }
 
-function getVariableLabel(variable) {
-    const labels = {
-        'sleep_duration': 'Durée de Sommeil',
-        'academic_pressure': 'Pression Académique',
-        'financial_stress': 'Stress Financier',
-        'study_satisfaction': 'Satisfaction Études',
-        'dietary_habits': 'Habitudes Alimentaires',
-        'work_study_hours': 'Heures d\'Étude/Travail',
-        'cgpa': 'CGPA'
-    };
-    return labels[variable] || variable;
+function showErrorMessage(container, message) {
+    d3.select(container)
+        .append('div')
+        .style('text-align', 'center')
+        .style('padding', '60px 20px')
+        .style('color', '#666')
+        .style('background', '#f8fafc')
+        .style('border-radius', '8px')
+        .style('border', '2px dashed #d1d5db')
+        .html(`
+            <h4 style="color: #dc2626; margin-bottom: 10px;">⚠️ Erreur d'affichage</h4>
+            <p>${message}</p>
+            <p style="font-size: 12px; margin-top: 10px; color: #9ca3af;">
+                Vérifiez la console pour plus de détails
+            </p>
+        `);
 }

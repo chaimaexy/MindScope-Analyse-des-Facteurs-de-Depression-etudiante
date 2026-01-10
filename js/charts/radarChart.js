@@ -1,10 +1,88 @@
-// js/charts/radarChart.js - Version corrigée et simplifiée
+// js/charts/radarChart.js - VERSION COMPLÈTE CORRIGÉE
 
 let radarChartInstance = null;
 
+// Définir les échelles maximales pour chaque feature
+const FEATURE_RANGES = {
+    'academic_pressure': { min: 0, max: 5 },
+    'study_satisfaction': { min: 0, max: 5 },
+    'sleep_duration': { min: 0, max: 5 },
+    'financial_stress': { min: 0, max: 5 },
+    'dietary_habits': { min: 0, max: 5 },
+    'work_study_hours': { min: 0, max: 10 },
+    'cgpa': { min: 0, max: 10 }
+};
+
+// AJOUTEZ CE MAPPING (il manquait)
+const FEATURE_MAPPING = {
+    'Academic Pressure': 'academic_pressure',
+    'Study Satisfaction': 'study_satisfaction', 
+    'Sleep Duration': 'sleep_duration',
+    'Financial Stress': 'financial_stress',
+    'Dietary Habits': 'dietary_habits',
+    'Work/Study Hours': 'work_study_hours',
+    'CGPA': 'cgpa'
+};
+
+// Inverser le mapping aussi
+const REVERSE_FEATURE_MAPPING = {
+    'academic_pressure': 'Academic Pressure',
+    'study_satisfaction': 'Study Satisfaction',
+    'sleep_duration': 'Sleep Duration',
+    'financial_stress': 'Financial Stress',
+    'dietary_habits': 'Dietary Habits',
+    'work_study_hours': 'Work/Study Hours',
+    'cgpa': 'CGPA'
+};
+
+// Normaliser les données selon leur échelle respective
+function normalizeData(data, features) {
+    console.log('Normalisation - données entrantes:', data);
+    console.log('Normalisation - features demandées:', features);
+    
+    const normalized = {};
+    
+    features.forEach(displayName => {
+        // Convertir le nom d'affichage en clé technique
+        const technicalKey = FEATURE_MAPPING[displayName] || displayName;
+        
+        // Trouver la valeur
+        let value;
+        
+        // Essayer dans l'ordre : clé technique, nom d'affichage, ou chercher
+        if (data[technicalKey] !== undefined) {
+            value = data[technicalKey];
+        } else if (data[displayName] !== undefined) {
+            value = data[displayName];
+        } else {
+            // Recherche par clés disponibles
+            const availableKeys = Object.keys(data);
+            const foundKey = availableKeys.find(key => 
+                key.toLowerCase() === technicalKey.toLowerCase() ||
+                key.toLowerCase().replace(/_/g, ' ') === displayName.toLowerCase()
+            );
+            value = foundKey ? data[foundKey] : 0;
+        }
+        
+        const range = FEATURE_RANGES[technicalKey] || { min: 0, max: 5 };
+        
+        if (value === undefined || value === null) {
+            normalized[displayName] = 0;
+            console.warn(`Valeur non trouvée pour ${displayName} (${technicalKey})`);
+        } else {
+            // Normaliser entre 0 et 5 pour l'affichage radar
+            normalized[displayName] = (value - range.min) / (range.max - range.min) * 5;
+            console.log(`Normalisé ${displayName}: ${value} -> ${normalized[displayName]}`);
+        }
+    });
+    
+    console.log('Résultat normalisation:', normalized);
+    return normalized;
+}
+
 // Initialiser le radar chart
 function createRadarChart(container, features) {
-    console.log('Création du radar chart...');
+    console.log('Création du radar chart avec features:', features);
     
     const containerElement = document.querySelector(container);
     if (!containerElement) {
@@ -12,17 +90,11 @@ function createRadarChart(container, features) {
         return;
     }
     
-    const width = containerElement.clientWidth;
-    const height = containerElement.clientHeight;
-    
     // Nettoyer le conteneur
-    d3.select(container).selectAll('*').remove();
+    containerElement.innerHTML = '';
     
-    // S'assurer des dimensions minimales
-    if (width < 100 || height < 100) {
-        console.warn('Dimensions trop petites pour le radar:', width, height);
-        return;
-    }
+    const width = containerElement.clientWidth || 500;
+    const height = 400;
     
     // Taille du radar
     const size = Math.min(width, height) - 80;
@@ -57,38 +129,46 @@ function createRadarChart(container, features) {
     return radarChartInstance;
 }
 
-// Mettre à jour le radar avec des données
+// Fonction principale de mise à jour
 function updateRadarChart(container, data1, data2, features, title = 'Comparaison') {
-    console.log('Mise à jour du radar avec données:', data1, data2);
+    console.log('Mise à jour du radar avec:', {
+        data1,
+        data2,
+        features,
+        title
+    });
     
-    if (!radarChartInstance) {
-        console.error('Radar chart non initialisé');
+    // VÉRIFIER SI LES DONNÉES SONT VALIDES
+    if (!data1) {
+        console.error('Données 1 manquantes');
         return;
     }
     
-    const { g, radius, features: featureNames } = radarChartInstance;
+    // Normaliser les données
+    const normalizedData1 = normalizeData(data1, features);
+    const normalizedData2 = data2 ? normalizeData(data2, features) : null;
+    
+    console.log('Données normalisées:', { normalizedData1, normalizedData2 });
+    
+    if (!radarChartInstance) {
+        console.log('Création du radar chart...');
+        createRadarChart(container, features);
+    }
+    
+    const { g, radius } = radarChartInstance;
     
     // Nettoyer les anciennes données
     g.selectAll('.radar-area').remove();
-    g.selectAll('.radar-circle').remove();
     g.selectAll('.radar-point').remove();
-    
-    // Vérifier les données
-    if (!data1 || !features || features.length === 0) {
-        console.warn('Données insuffisantes pour le radar');
-        g.append('text')
-            .attr('text-anchor', 'middle')
-            .attr('dy', '0.35em')
-            .style('fill', '#64748b')
-            .text('Sélectionnez des données à comparer');
-        return;
-    }
+    g.selectAll('.radar-label').remove();
+    g.selectAll('.radar-title').remove();
+    g.selectAll('.radar-legend').remove();
     
     // Nombre de features
     const numFeatures = features.length;
     const angleSlice = (Math.PI * 2) / numFeatures;
     
-    // Échelle (0-5 pour nos métriques)
+    // Échelle (0-5 pour nos métriques normalisées)
     const scale = d3.scaleLinear()
         .domain([0, 5])
         .range([0, radius]);
@@ -101,17 +181,22 @@ function updateRadarChart(container, data1, data2, features, title = 'Comparaiso
     
     // Préparer les données pour le radar
     const prepareRadarData = (data, features) => {
-        return features.map((key, i) => ({
-            axis: featureNames[i] || key,
-            value: typeof data[key] === 'number' ? data[key] : 0,
-            originalValue: data[key]
-        }));
+        return features.map((displayName, i) => {
+            const value = data[displayName] !== undefined ? data[displayName] : 0;
+            return {
+                axis: displayName, // Utiliser le nom d'affichage
+                value: value,
+                originalKey: FEATURE_MAPPING[displayName] || displayName
+            };
+        });
     };
     
-    const radarData1 = prepareRadarData(data1, features);
-    const radarData2 = data2 ? prepareRadarData(data2, features) : null;
+    const radarData1 = prepareRadarData(normalizedData1, features);
+    const radarData2 = normalizedData2 ? prepareRadarData(normalizedData2, features) : null;
     
-    // Dessiner la première série (remplie)
+    console.log('Données radar préparées:', { radarData1, radarData2 });
+    
+    // Dessiner la première série
     const area1 = g.append('path')
         .datum(radarData1)
         .attr('class', 'radar-area radar-series-1')
@@ -167,39 +252,32 @@ function updateRadarChart(container, data1, data2, features, title = 'Comparaiso
         });
     }
     
-    // Ajouter les labels des axes si pas déjà présents
-    if (g.selectAll('.radar-label').empty()) {
-        features.forEach((label, i) => {
-            const angle = i * angleSlice;
-            const labelRadius = radius + 25;
-            const x = labelRadius * Math.sin(angle);
-            const y = labelRadius * -Math.cos(angle);
-            
-            // Formatage du label
-            const formattedLabel = label
-                .replace(/_/g, ' ')
-                .replace(/\b\w/g, l => l.toUpperCase());
-            
-            g.append('text')
-                .attr('class', 'radar-label')
-                .attr('x', x)
-                .attr('y', y)
-                .attr('text-anchor', 'middle')
-                .attr('dominant-baseline', 'middle')
-                .style('font-size', '11px')
-                .style('fill', '#475569')
-                .style('font-weight', '500')
-                .text(formattedLabel);
-        });
-    }
+    // Ajouter les labels des axes
+    features.forEach((displayName, i) => {
+        const angle = i * angleSlice;
+        const labelRadius = radius + 35;
+        const x = labelRadius * Math.sin(angle);
+        const y = labelRadius * -Math.cos(angle);
+        
+        g.append('text')
+            .attr('class', 'radar-label')
+            .attr('x', x)
+            .attr('y', y)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .style('font-size', '12px')
+            .style('fill', '#475569')
+            .style('font-weight', '500')
+            .text(displayName);
+    });
     
     // Titre
     g.append('text')
         .attr('class', 'radar-title')
         .attr('x', 0)
-        .attr('y', -radius - 35)
+        .attr('y', -radius - 45)
         .attr('text-anchor', 'middle')
-        .style('font-size', '14px')
+        .style('font-size', '16px')
         .style('font-weight', '600')
         .style('fill', '#1e293b')
         .text(title);
@@ -207,7 +285,7 @@ function updateRadarChart(container, data1, data2, features, title = 'Comparaiso
     // Légende
     const legend = g.append('g')
         .attr('class', 'radar-legend')
-        .attr('transform', `translate(${-radius + 20}, ${radius + 30})`);
+        .attr('transform', `translate(${-radius + 20}, ${radius + 40})`);
     
     // Série 1
     legend.append('circle')
@@ -221,10 +299,11 @@ function updateRadarChart(container, data1, data2, features, title = 'Comparaiso
         .attr('y', 4)
         .style('font-size', '12px')
         .style('fill', '#475569')
+        .style('font-weight', '500')
         .text(getSeriesLabel('series1', title));
     
     // Série 2 si disponible
-    if (data2) {
+    if (radarData2) {
         legend.append('circle')
             .attr('cx', 120)
             .attr('cy', 0)
@@ -236,17 +315,24 @@ function updateRadarChart(container, data1, data2, features, title = 'Comparaiso
             .attr('y', 4)
             .style('font-size', '12px')
             .style('fill', '#475569')
+            .style('font-weight', '500')
             .text(getSeriesLabel('series2', title));
     }
+    
+    console.log('✅ Radar mis à jour avec succès');
 }
 
 // Obtenir le label de la série
 function getSeriesLabel(series, title) {
-    if (title.includes('Cluster vs Global')) {
+    if (title.includes('Global')) {
         return series === 'series1' ? 'Cluster' : 'Moyenne Globale';
-    } else if (title.includes('Étudiant vs Cluster')) {
+    } else if (title.includes('Étudiant')) {
         return series === 'series1' ? 'Étudiant' : 'Moyenne Cluster';
-    } else if (title.includes('Deux Clusters')) {
+    } else if (title.includes('Cluster') && title.includes('vs')) {
+        const matches = title.match(/Cluster (\d+) vs Cluster (\d+)/);
+        if (matches) {
+            return series === 'series1' ? `Cluster ${matches[1]}` : `Cluster ${matches[2]}`;
+        }
         return series === 'series1' ? 'Cluster 1' : 'Cluster 2';
     }
     return series === 'series1' ? 'Série 1' : 'Série 2';
@@ -261,13 +347,14 @@ function drawRadarGrid() {
     // Nettoyer l'ancienne grille
     g.selectAll('.radar-circle-grid').remove();
     g.selectAll('.radar-axis').remove();
+    g.selectAll('.radar-level-label').remove();
     
-    // 5 niveaux concentriques
+    // 5 niveaux concentriques (0-5)
     const levels = 5;
     const levelRadius = radius / levels;
     
     // Cercles concentriques
-    for (let i = 1; i <= levels; i++) {
+    for (let i = 0; i <= levels; i++) {
         const currentRadius = levelRadius * i;
         
         g.append('circle')
@@ -278,14 +365,15 @@ function drawRadarGrid() {
             .style('stroke-width', 1)
             .style('stroke-dasharray', i === levels ? 'none' : '2,2');
         
-        // Labels des niveaux (à droite du niveau)
-        if (i < levels) {
+        // Labels des niveaux
+        if (i > 0 && i < levels) {
             g.append('text')
                 .attr('class', 'radar-level-label')
                 .attr('x', currentRadius + 5)
                 .attr('y', -5)
                 .style('font-size', '10px')
                 .style('fill', '#94a3b8')
+                .style('font-weight', '500')
                 .text(i);
         }
     }
@@ -310,55 +398,4 @@ function drawRadarGrid() {
                 .style('stroke-width', 1);
         }
     }
-}
-
-// Exporter le radar
-function exportRadarChart(format, filename = 'radar-comparaison') {
-    if (!radarChartInstance) return;
-    
-    const svgElement = radarChartInstance.svg.node();
-    exportChart(svgElement, format, filename);
-}
-
-// Mettre à jour le radar pour un cluster
-function updateRadarForCluster(clusterData) {
-    if (!clusterData || clusterData.length === 0) return;
-    
-    // Calculer les moyennes du cluster
-    const clusterMeans = calculateClusterMeans(clusterData);
-    const globalMeans = calculateGlobalMeans();
-    
-    const title = `Cluster ${currentSelection.cluster + 1} vs Moyenne Globale`;
-    updateRadarChart('#profile-radar', clusterMeans, globalMeans, CONFIG.featureKeys, title);
-}
-
-// Mettre à jour le radar pour un étudiant
-function updateRadarForStudent(student) {
-    if (!student) return;
-    
-    const clusterData = processedData.filter(d => d.cluster_id === student.cluster_id);
-    const clusterMeans = calculateClusterMeans(clusterData);
-    
-    const title = `Étudiant #${student.id} vs Son Cluster`;
-    updateRadarChart('#profile-radar', student, clusterMeans, CONFIG.featureKeys, title);
-}
-
-// Calculer les moyennes d'un cluster
-function calculateClusterMeans(clusterData) {
-    const means = {};
-    CONFIG.featureKeys.forEach(key => {
-        const values = clusterData.map(d => d[key]).filter(v => v != null);
-        means[key] = values.length > 0 ? d3.mean(values) : 0;
-    });
-    return means;
-}
-
-// Calculer les moyennes globales
-function calculateGlobalMeans() {
-    const means = {};
-    CONFIG.featureKeys.forEach(key => {
-        const values = processedData.map(d => d[key]).filter(v => v != null);
-        means[key] = values.length > 0 ? d3.mean(values) : 0;
-    });
-    return means;
 }

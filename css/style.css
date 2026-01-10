@@ -32,16 +32,32 @@ body {
 
 /* Dans votre fichier CSS */
 #profile-radar {
-    width: 100%;
-    height: 400px; /* Augmentez la hauteur */
-    min-height: 350px;
+     width: 100%;
+    height: 450px !important; /* Force une hauteur fixe */
+    min-height: 450px;
+    flex: 1;
+
 }
 
-.chart-container {
-    width: 100%;
-    height: 100%;
+body {
     position: relative;
 }
+
+/* Éviter que d'autres éléments ne cachent le tooltip */
+.dashboard-container,
+.main-content,
+.chart-card {
+    position: static; /* Important pour les positions absolues */
+}
+#cluster-heatmap {
+    width: 550px;
+    height: 550px !important;
+    min-height: 550px;
+    margin-top: 20px;
+    padding-bottom: 20px;
+}
+
+
 
 /* Sidebar */
 .sidebar {
@@ -218,12 +234,15 @@ body {
 }
 
 .chart-card {
-    background: white;
+     background: white;
     padding: 1.5rem;
     border-radius: 12px;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
+    transition: all 0.3s ease;
+    position: relative; /* Ajoutez cette ligne */
+    overflow: hidden; /* Empêche le débordement */
 }
 
 .card-header {
@@ -234,11 +253,16 @@ body {
     padding-bottom: 10px;
     color: #1e293b;
 }
-
+#cluster-map {
+    height: 500px !important;
+    min-height: 450px;
+}
 .chart-container {
-    width: 100%;
-    height: 400px;
+  width: 100%;
+    height: 400px !important; /* Hauteur fixe */
+    min-height: 400px;
     flex: 1;
+    position: relative;
 }
 
 /* Charts in Chart Container */
@@ -252,21 +276,15 @@ body {
     display: grid;
     grid-template-columns: 1.5fr 1fr;
     gap: 20px;
-    grid-template-areas: 
-        "large small"
-        "full-width full-width";
+    margin-bottom: 20px;
+    min-height: 600px;
 }
 
-.profiles-grid .chart-card.large {
-    grid-area: large;
-}
-
-.profiles-grid .chart-card.small {
-    grid-area: large;
-}
-
-.profiles-grid .chart-card.full-width {
-    grid-area: full-width;
+.profiles-grid .chart-card {
+    min-height: 600px;
+    height: auto;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Card Header with Controls */
@@ -298,7 +316,7 @@ body {
 /* Export Buttons */
 .chart-footer {
     display: flex;
-    justify-content: flex-end;
+    justify-content: center; /* ← Changez flex-end en center */
     gap: 10px;
     margin-top: 15px;
     border-top: 1px solid #f1f5f9;

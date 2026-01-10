@@ -139,11 +139,17 @@ function initializeVisualizations() {
         
         // 2. Radar chart
         try {
-            if (typeof createRadarChart === 'function') {
-                createRadarChart('#profile-radar', CONFIG.features);
-            } else {
-                console.warn('createRadarChart non disponible');
-            }
+            // Créer le radar chart avec les features
+            createRadarChart('#profile-radar', CONFIG.featureKeys);
+            
+            // Mettre à jour avec des données par défaut
+            setTimeout(() => {
+                if (clusters.length > 0) {
+                    const clusterData = clusters[0] || [];
+                    updateRadarForCluster(clusterData);
+                }
+            }, 500);
+            
         } catch (error) {
             console.error('Erreur dans radar chart:', error);
         }
@@ -159,20 +165,15 @@ function initializeVisualizations() {
 
         
         // 4. Small multiples
-        try {
-            if (typeof createSmallMultiples === 'function') {
-                createSmallMultiples('#cluster-distributions', processedData, clusters, 'sleep_duration');
-            }
-        } catch (error) {
-            console.error('Erreur dans small multiples:', error);
-            // Afficher un message d'erreur
-            d3.select('#cluster-distributions').html(`
-                <div style="text-align: center; padding: 40px; color: #666;">
-                    <p>Erreur lors de l'affichage des distributions</p>
-                    <p style="font-size: 12px;">Les données sont disponibles mais l'affichage a échoué.</p>
-                </div>
-            `);
-        }
+       try {
+    if (typeof createSunburstChart === 'function') {
+        createSunburstChart('#bubble-chart-container', processedData, clusters);
+    } else {
+        console.warn('createSunburstChart non disponible');
+    }
+} catch (error) {
+    console.error('Erreur dans sunburst chart:', error);
+}
         
         // 5. Légende
         createClusterLegend();
@@ -390,8 +391,8 @@ function updateDisplayForStudent(student) {
     showStudentSummary(student, clusterData);
     
     // G. Mettre à jour les autres visualisations
-    updateSmallMultiples();
-    updateOutliers();
+    updateBubbleChart();
+    
     
     console.log('✅ Affichage mis à jour pour l\'étudiant #' + student.id);
 }
@@ -635,17 +636,25 @@ function selectCluster(clusterIndex) {
     updateRadarForCluster(clusterData);
     
     // Mettre à jour les small multiples
-    updateSmallMultiples();
+    updateBubbleChart();
     
     // Mettre à jour les outliers
-    updateOutliers();
+     updateOutliers();
     
     // Mettre à jour le badge de risque
     updateRiskBadge(clusterData);
 }
 
+function updateOutliers() {
+    if (currentSelection.cluster !== null) {
+        const clusterData = processedData.filter(d => d.cluster_id === currentSelection.cluster);
+        const outliers = detectOutliers(clusterData, CONFIG.featureKeys);
+        displayOutliers('#outliers-list', outliers);
+    }
+}
+
 // Mettre à jour les statistiques du cluster
-// Mettre à jour les statistiques du cluster
+// Mettre à jour les statistiques du cluster - VERSION ULTIME
 function updateClusterStats(clusterData) {
     const container = d3.select('#cluster-stats');
     container.selectAll('*').remove();
@@ -657,16 +666,83 @@ function updateClusterStats(clusterData) {
         return values.length > 0 ? d3.mean(values) : 0;
     };
     
-    const safeCount = (data, condition) => {
+    // DEBUG: Afficher les 3 premiers étudiants du cluster
+    console.log('=== DEBUG CLUSTER DATA ===');
+    if (clusterData.length > 0) {
+        clusterData.slice(0, 3).forEach((student, i) => {
+            console.log(`Student ${i+1}: ID=${student.id}, suicidal="${student.hasSuicidalThoughts}", type=${typeof student.hasSuicidalThoughts}`);
+        });
+    }
+    
+    // Fonction de comptage robuste POUR LES PENSÉES SUICIDAIRES
+    const countSuicidalThoughts = (data) => {
         if (!data || data.length === 0) return 0;
-        return data.filter(condition).length;
+        
+        let count = 0;
+        data.forEach((student, index) => {
+            const val = student.hasSuicidalThoughts;
+            
+            // DEBUG détaillé pour les 5 premiers
+            if (index < 5) {
+                console.log(`  [${index}] ID ${student.id}: suicidal = "${val}" (${typeof val})`);
+            }
+            
+            if (val === undefined || val === null) return;
+            
+            let isSuicidal = false;
+            
+            // Vérifier selon le type
+            if (typeof val === 'boolean') {
+                isSuicidal = val === true;
+            } else if (typeof val === 'number') {
+                isSuicidal = val === 1;
+            } else if (typeof val === 'string') {
+                const lowerVal = val.toString().toLowerCase().trim();
+                // CORRECTION IMPORTANTE: "false" en chaîne doit retourner false
+                // "true" en chaîne doit retourner true
+                isSuicidal = (lowerVal === 'true' || 
+                             lowerVal === 'yes' || 
+                             lowerVal === '1' || 
+                             lowerVal === 'oui' ||
+                             lowerVal === 'y');
+            }
+            
+            if (isSuicidal) {
+                count++;
+                if (index < 5) {
+                    console.log(`    → COMPTÉ comme suicidaire`);
+                }
+            }
+        });
+        
+        console.log(`Total suicidal in cluster: ${count}/${data.length}`);
+        return count;
+    };
+    
+    // Fonction pour compter la dépression
+    const countDepression = (data) => {
+        if (!data || data.length === 0) return 0;
+        
+        return data.filter(d => {
+            const val = d.depression;
+            if (typeof val === 'number') return val === 1;
+            if (typeof val === 'string') return val.toString().trim() === '1' || val.toLowerCase().trim() === 'yes';
+            if (typeof val === 'boolean') return val === true;
+            return false;
+        }).length;
     };
     
     const clusterSize = clusterData.length;
-    const depressionRate = clusterSize > 0 ? 
-        (safeCount(clusterData, d => d.depression === 1) / clusterSize * 100) : 0;
-    const suicidalRate = clusterSize > 0 ? 
-        (safeCount(clusterData, d => d.hasSuicidalThoughts) / clusterSize * 100) : 0;
+    const depressionCount = countDepression(clusterData);
+    const suicidalCount = countSuicidalThoughts(clusterData);
+    
+    const depressionRate = clusterSize > 0 ? (depressionCount / clusterSize * 100) : 0;
+    const suicidalRate = clusterSize > 0 ? (suicidalCount / clusterSize * 100) : 0;
+    
+    console.log('=== RÉSULTATS CLUSTER ===');
+    console.log(`Taille: ${clusterSize}`);
+    console.log(`Dépression: ${depressionCount} (${depressionRate.toFixed(1)}%)`);
+    console.log(`Suicidaire: ${suicidalCount} (${suicidalRate.toFixed(1)}%)`);
     
     const stats = [
         {
@@ -679,11 +755,7 @@ function updateClusterStats(clusterData) {
             value: depressionRate.toFixed(1),
             unit: '%'
         },
-        {
-            label: 'Pensées Suicidaires',
-            value: suicidalRate.toFixed(1),
-            unit: '%'
-        },
+       
         {
             label: 'Âge Moyen',
             value: safeMean(clusterData, 'age').toFixed(1),
@@ -750,31 +822,152 @@ function updateRadarForCluster(clusterData) {
 
 // Mettre à jour le radar chart pour un étudiant
 function updateRadarForStudent(student) {
-    const clusterData = processedData.filter(d => d.cluster_id === student.cluster_id);
+    console.log('🔄 Mise à jour du radar pour étudiant', student);
+    
+    // Vérifier les données de l'étudiant
+    console.log('Données étudiant disponibles:', {
+        academic_pressure: student.academic_pressure,
+        study_satisfaction: student.study_satisfaction,
+        sleep_duration: student.sleep_duration,
+        financial_stress: student.financial_stress,
+        dietary_habits: student.dietary_habits,
+        work_study_hours: student.work_study_hours,
+        cgpa: student.cgpa
+    });
+    
+    // Obtenir les données du cluster
+    const clusterData = clusters[student.cluster_id] || [];
     
     // Calculer les moyennes du cluster
     const clusterMeans = {};
     CONFIG.featureKeys.forEach(key => {
-        clusterMeans[key] = d3.mean(clusterData, d => d[key]);
+        const values = clusterData.map(d => d[key] || 0);
+        clusterMeans[key] = d3.mean(values) || 0;
     });
     
-    updateRadarChart('#profile-radar', student, clusterMeans, CONFIG.features, 'Étudiant vs Cluster');
+    console.log('Moyennes cluster:', clusterMeans);
+    
+    // Utiliser CONFIG.features (noms d'affichage) au lieu de CONFIG.featureKeys
+    updateRadarChart(
+        '#profile-radar',
+        student,               // Données étudiant
+        clusterMeans,          // Moyennes du cluster
+        CONFIG.features,       // Noms d'affichage (pas les clés techniques)
+        `Étudiant #${student.id} vs Cluster ${student.cluster_id + 1}`
+    );
 }
 
-// Mettre à jour les small multiples
-function updateSmallMultiples() {
-    const selectedVariable = document.getElementById('distribution-variable').value;
-    createSmallMultiples('#cluster-distributions', processedData, clusters, selectedVariable);
-}
-
-// Mettre à jour les outliers
-function updateOutliers() {
-    if (currentSelection.cluster !== null) {
-        const clusterData = processedData.filter(d => d.cluster_id === currentSelection.cluster);
-        const outliers = detectOutliers(clusterData, CONFIG.featureKeys);
-        displayOutliers('#outliers-list', outliers);
+function calculateBubbleChartStats(clusters, sizeMetric = 'size') {
+    if (!clusters || clusters.length === 0) {
+        console.warn('Aucun cluster disponible pour calculer les statistiques');
+        return [];
     }
+    
+    return clusters.map((cluster, id) => {
+        if (!cluster || cluster.length === 0) {
+            return {
+                id: id,
+                size: 10, // Taille minimale
+                depressionRate: 0,
+                avgAge: 0,
+                avgCGPA: 0,
+                avgSleep: 0,
+                avgAcademic: 0,
+                avgFinancial: 0,
+                riskLevel: 'low'
+            };
+        }
+        
+        // Calculer les moyennes
+        const size = cluster.length;
+        const depressionRate = (cluster.filter(d => d.depression === 1).length / size) * 100;
+        const avgAge = d3.mean(cluster, d => d.age) || 0;
+        const avgCGPA = d3.mean(cluster, d => d.cgpa) || 0;
+        const avgSleep = d3.mean(cluster, d => d.sleep_duration) || 0;
+        const avgAcademic = d3.mean(cluster, d => d.academic_pressure) || 0;
+        const avgFinancial = d3.mean(cluster, d => d.financial_stress) || 0;
+        
+        // Déterminer le niveau de risque
+        let riskLevel = 'low';
+        if (depressionRate > 40) riskLevel = 'high';
+        else if (depressionRate > 20) riskLevel = 'medium';
+        
+        // Calculer la taille selon la métrique choisie
+        let bubbleSize = size; // Par défaut: taille du cluster
+        
+        if (sizeMetric === 'depression') {
+            bubbleSize = depressionRate * 2; // Multiplier pour mieux visualiser
+        } else if (sizeMetric === 'academic') {
+            bubbleSize = avgAcademic * 20; // 1-5 scale -> 20-100
+        } else if (sizeMetric === 'financial') {
+            bubbleSize = avgFinancial * 20; // 1-5 scale -> 20-100
+        }
+        
+        // S'assurer que la taille n'est pas trop petite
+        bubbleSize = Math.max(20, bubbleSize);
+        
+        return {
+            id: id,
+            size: bubbleSize,
+            originalSize: size, // Garder la taille originale
+            depressionRate: depressionRate,
+            avgAge: avgAge,
+            avgCGPA: avgCGPA,
+            avgSleep: avgSleep,
+            avgAcademic: avgAcademic,
+            avgFinancial: avgFinancial,
+            riskLevel: riskLevel
+        };
+    });
 }
+// Mettre à jour les small multiples
+function updateBubbleChart() {
+    console.log('Mise à jour du bubble chart...');
+    
+    // Vérifier si les éléments existent
+    const sizeByElement = document.getElementById('bubble-size');
+    const colorByElement = document.getElementById('bubble-color');
+    
+    if (!sizeByElement || !colorByElement) {
+        console.warn('Éléments de contrôle du bubble chart non trouvés');
+        return;
+    }
+    
+    const sizeBy = sizeByElement.value;
+    const colorBy = colorByElement.value;
+    
+    console.log('Options sélectionnées - Taille:', sizeBy, 'Couleur:', colorBy);
+    
+    // Recalculer les stats avec les nouvelles options
+    const clusterStats = calculateBubbleChartStats(clusters, sizeBy);
+    
+    // Mettre à jour le graphique
+    updateBubbleVisualization(clusterStats, sizeBy, colorBy);
+}
+
+// Fonction pour mettre à jour la visualisation du bubble chart
+function updateBubbleVisualization(clusterStats, sizeBy, colorBy) {
+    console.log('Mise à jour de la visualisation bubble avec:', clusterStats.length, 'clusters');
+    
+    const container = document.getElementById('bubble-chart-container');
+    if (!container) {
+        console.error('Conteneur bubble chart non trouvé');
+        return;
+    }
+    
+    // Vérifier si createBubbleChart accepte les nouveaux paramètres
+    try {
+    if (typeof createSunburstChart === 'function') {
+        createSunburstChart('#bubble-chart-container', processedData, clusters);
+    } else {
+        console.warn('createSunburstChart non disponible');
+    }
+} catch (error) {
+    console.error('Erreur dans sunburst chart:', error);
+}
+}
+
+
 
 // Mettre à jour le badge de risque
 function updateRiskBadge(clusterData) {
@@ -886,7 +1079,7 @@ function initializeEventListeners() {
     
     // Variable de distribution
     d3.select('#distribution-variable').on('change', function() {
-        updateSmallMultiples();
+        updateBubbleChart();
     });
     
     // Métrique d'outliers

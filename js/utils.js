@@ -29,6 +29,126 @@ var Utils = {
         
         return mapping[value] || (isNaN(value) ? 3 : +value);
     },
+
+           // Ajoutez à votre Utils existant
+    normalizeIndianCity: function(cityName) {
+        if (!cityName) return 'Unknown';
+        
+        const cityMap = {
+            // Villes majeures
+            'Mumbai': 'Mumbai',
+            'Delhi': 'Delhi',
+            'Bangalore': 'Bangalore',
+            'Chennai': 'Chennai',
+            'Hyderabad': 'Hyderabad',
+            'Kolkata': 'Kolkata',
+            'Pune': 'Pune',
+            'Ahmedabad': 'Ahmedabad',
+            'Jaipur': 'Jaipur',
+            'Lucknow': 'Lucknow',
+            
+            // Villes de votre dataset
+            'Nagpur': 'Nagpur',
+            'Visakhapatnam': 'Visakhapatnam',
+            'Vadodara': 'Vadodara',
+            'Srinagar': 'Srinagar',
+            'Varanasi': 'Varanasi',
+            'Thane': 'Thane',
+            'Nashik': 'Nashik',
+            'Kalyan': 'Kalyan',
+            'Ghaziabad': 'Ghaziabad',
+            'Faridabad': 'Faridabad',
+            'Surat': 'Surat',
+            'Rajkot': 'Rajkot',
+            'Bhopal': 'Bhopal',
+            'Indore': 'Indore',
+            'Kanpur': 'Kanpur',
+            'Agra': 'Agra',
+            'Meerut': 'Meerut',
+            'Ludhiana': 'Ludhiana',
+            'Patna': 'Patna',
+            'Vasai-Virar': 'Vasai-Virar',
+            
+            // Corrections
+            'Khaziabad': 'Ghaziabad',
+            'Less Delhi': 'Delhi',
+            'Less than 5 Kalyan': 'Kalyan',
+            
+            // Noms atypiques mappés sur des villes réelles
+            'Bhavna': 'Mumbai',
+            'Gaurav': 'Delhi',
+            'Harsh': 'Bangalore',
+            'Harsha': 'Pune',
+            'Kibara': 'Delhi',
+            'Mihir': 'Mumbai',
+            'Mira': 'Mumbai',
+            'Nalini': 'Bangalore',
+            'Nalyan': 'Kalyan',
+            'Nandini': 'Bangalore',
+            'Rashi': 'Mumbai',
+            'Reyansh': 'Delhi',
+            'Saanvi': 'Bangalore',
+            'Vaanya': 'Delhi',
+            
+            // Diplômes et valeurs non-ville
+            'M.Com': 'Unknown',
+            'M.Tech': 'Unknown',
+            'ME': 'Unknown',
+            '3': 'Unknown'
+        };
+        
+        const normalized = cityMap[cityName] || cityName;
+        
+        // Vérifier si c'est encore un nom atypique
+        const nonCityNames = ['3', 'Bhavna', 'Gaurav', 'Harsh', 'Harsha', 'Kibara', 
+                            'Mihir', 'Mira', 'Nalini', 'Nalyan', 'Nandini', 
+                            'Rashi', 'Reyansh', 'Saanvi', 'Vaanya',
+                            'M.Com', 'M.Tech', 'ME'];
+        
+        if (nonCityNames.includes(normalized)) {
+            return 'Unknown';
+        }
+        
+        return normalized;
+    },
+
+    // Nouvelle fonction pour obtenir les coordonnées d'une ville
+    getCityCoordinates: function(cityName) {
+        const coordinates = {
+            'Mumbai': [72.8777, 19.0760],
+            'Delhi': [77.1025, 28.7041],
+            'Bangalore': [77.5946, 12.9716],
+            'Chennai': [80.2707, 13.0827],
+            'Hyderabad': [78.4867, 17.3850],
+            'Kolkata': [88.3639, 22.5726],
+            'Pune': [73.8567, 18.5204],
+            'Ahmedabad': [72.5714, 23.0225],
+            'Jaipur': [75.7873, 26.9124],
+            'Lucknow': [80.9462, 26.8467],
+            'Nagpur': [79.0882, 21.1458],
+            'Visakhapatnam': [83.2185, 17.6868],
+            'Vadodara': [73.1812, 22.3072],
+            'Srinagar': [74.7973, 34.0837],
+            'Varanasi': [82.9739, 25.3176],
+            'Thane': [72.9762, 19.2183],
+            'Nashik': [73.7898, 19.9975],
+            'Kalyan': [73.1305, 19.2354],
+            'Ghaziabad': [77.4390, 28.6692],
+            'Faridabad': [77.3190, 28.4089],
+            'Surat': [72.8311, 21.1702],
+            'Rajkot': [70.8029, 22.3039],
+            'Bhopal': [77.4126, 23.2599],
+            'Indore': [75.8577, 22.7196],
+            'Kanpur': [80.3319, 26.4499],
+            'Agra': [78.0081, 27.1767],
+            'Meerut': [77.7039, 28.9845],
+            'Ludhiana': [75.8573, 30.9010],
+            'Patna': [85.1376, 25.5941],
+            'Vasai-Virar': [72.8397, 19.4700]
+        };
+        
+        return coordinates[cityName] || [77.1025, 28.7041]; // Delhi par défaut
+    },
     // Normaliser entre 0 et 1
     normalize: function(value, min, max) {
         if (max === min) return 0.5;
