@@ -1,0 +1,20 @@
+{
+  "name": "lumina-dashboard",
+  "version": "1.0.0",
+  "description": "Tableau de bord interactif pour l'analyse de la dépression étudiante",
+  "main": "index.html",
+  "scripts": {
+    "start": "http-server -c-1",
+    "dev": "live-server --port=3000",
+    "build": "echo 'Build not required for static site'"
+  },
+  "dependencies": {
+    "d3": "^7.8.5"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1",
+    "live-server": "^1.2.2"
+  },
+  "author": "Lumina Analytics",
+  "license": "MIT"
+}

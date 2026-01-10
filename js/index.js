@@ -1,76 +1,58 @@
-import { loadData, setupFilters } from './main.js';
-import { createClusterPlot } from './charts/dimReduction.js';
-import { createRadarChart as createSummaryRadar } from './charts/studentRadar.js';
+import { state, subscribe, updateState } from './dashboardState.js';
+import { processData } from './utils/process.js';
+import { drawKPIs } from './sections/kpis.js';
+import { drawDistribution } from './sections/distribution.js';
+import { drawPCA } from './sections/pcaScatter.js';
+import { drawParallelCoords } from './sections/parallelCoords.js';
+import { drawDivergingBars } from './sections/divergingBar.js';
+import { drawHeatmap } from './sections/heatmap.js';
+import { drawSankey } from './sections/sankey.js';
 
-async function init() {
-    try {
-        await loadData();
-        
-        const filterManager = setupFilters(renderOverviewPage);
-        renderOverviewPage(filterManager.getFilteredData());
-        
-    } catch (error) {
-        console.error("Erreur lors de l'initialisation:", error);
-        d3.select("#kpi-container").html("<p style='color:red'>Erreur de chargement du fichier CSV. Vérifiez le chemin 'data/student_depression_dataset.csv'</p>");
-    }
-}
+async function initDashboard() {
+    const raw = await d3.csv("data/student_depression_dataset.csv");
+    
+    // 1. Pré-traitement (PCA, Clustering, Nettoyage)
+    const data = processData(raw);
+    
+    // 2. Initialiser l'état
+    updateState({ rawData: data, filteredData: data });
 
-function renderOverviewPage(data) {
-    const total = data.length;
-    const depressedCount = data.filter(d => d.isDepressed).length;
-    const suicidalCount = data.filter(d => d.hasSuicidalThoughts).length;
-    const avgPressure = d3.mean(data, d => d.academic_pressure).toFixed(1);
-    const lowSleepCount = data.filter(d => d.sleep_duration <= 2).length;
-
-    const kpiContainer = d3.select("#kpi-container");
-    kpiContainer.html(`
-        <div class="kpi-card">
-            <div class="kpi-label">Prévalence Dépression</div>
-            <div class="kpi-value" style="color:#ef4444">${((depressedCount/total)*100).toFixed(1)}%</div>
-            <div class="kpi-subtext">${depressedCount} étudiants</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-label">Alerte Idées Suicidaires</div>
-            <div class="kpi-value" style="color:#b91c1c">${((suicidalCount/total)*100).toFixed(1)}%</div>
-            <div class="kpi-subtext">Niveau de risque élevé</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-label">Pression Académique Moyenne</div>
-            <div class="kpi-value">${avgPressure} <small>/5</small></div>
-            <div class="kpi-subtext">Moyenne de la cohorte</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-label">Sommeil Insuffisant</div>
-            <div class="kpi-value">${((lowSleepCount/total)*100).toFixed(1)}%</div>
-            <div class="kpi-subtext">Dort moins de 6h</div>
-        </div>
-    `);
-
-    createClusterPlot(data, "#cluster-chart", (student) => {
-        updateSummaryRadar(student, data);
+    // 3. Setup des événements UI
+    d3.select("#genderFilter").on("change", function() {
+        updateState({ filters: { ...state.filters, gender: this.value } });
     });
+
+    d3.select("#reset-filters").on("click", () => {
+        location.reload(); // Simple reset
+    });
+
+    // 4. Souscrire au rendu (Rendu initial + chaque mise à jour)
+    subscribe(renderAllSections);
     
-    if (data.length > 0) {
-        updateSummaryRadar(data[0], data);
-    }
+    // Premier rendu
+    renderAllSections(state);
 }
 
-function updateSummaryRadar(student, allData) {
-    const averages = {
-        'Pression': d3.mean(allData, d => d.academic_pressure),
-        'Satisfaction': d3.mean(allData, d => d.study_satisfaction),
-        'Sommeil': d3.mean(allData, d => d.sleep_duration),
-        'Finance': d3.mean(allData, d => d.financial_stress)
-    };
-
-    const target = {
-        'Pression': student.academic_pressure,
-        'Satisfaction': student.study_satisfaction,
-        'Sommeil': student.sleep_duration,
-        'Finance': student.financial_stress
-    };
+function renderAllSections(currentState) {
+    const data = currentState.filteredData;
     
-    createSummaryRadar(target, averages, "#radar-chart");
+    // Mise à jour du compteur de texte
+    d3.select("#filter-status").text(`Affichage de ${data.length.toLocaleString()} étudiants`);
+
+    // Section 1 & 2
+    drawKPIs(data, "#kpi-container");
+    drawDistribution(data, "#distribution-chart");
+
+    // Section 3
+    drawPCA(data, "#pca-scatter");
+    drawParallelCoords(data, "#parallel-coords");
+
+    // Section 4
+    drawDivergingBars(data, "#diverging-bar");
+    drawHeatmap(data, "#correlation-heatmap");
+
+    // Section 5
+    drawSankey(data, "#sankey-diagram");
 }
 
-init();
+initDashboard();

@@ -3,13 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lumina | Analytics Santé Mentale - Vue d'ensemble</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <title>Lumina | Analytics Santé Mentale - Dashboard</title>
+    <link rel="stylesheet" href="css/style_dash.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- CDN externes -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
 </head>
 <body>
     <div class="dashboard-container">
+        <!-- Sidebar -->
         <aside class="sidebar">
             <div class="brand">
                 <div class="logo-icon">L</div>
@@ -18,41 +23,262 @@
             <nav class="menu">
                 <a href="index.html" class="menu-item active"><span>📊</span> Vue d'ensemble</a>
                 <a href="profils.html" class="menu-item"><span>👥</span> Profils</a>
+                <a href="comparaison.html" class="menu-item"><span>⚖️</span> Comparaisons</a>
             </nav>
+            
             <div class="filters-section">
-                <h3>FILTRES</h3>
+                <h3>FILTRES INTERACTIFS</h3>
+                
                 <div class="filter-group">
-                    <label>Genre</label>
+                    <label>👤 Genre</label>
                     <select id="genderFilter">
                         <option value="all">Tous</option>
                         <option value="Male">Homme</option>
                         <option value="Female">Femme</option>
                     </select>
                 </div>
+                
+                <div class="filter-group">
+                    <label>🏙️ Ville</label>
+                    <select id="cityFilter">
+                        <option value="all">Toutes les villes</option>
+                        <!-- Rempli dynamiquement -->
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label>🎓 Niveau d'Étude</label>
+                    <select id="degreeFilter">
+                        <option value="all">Tous</option>
+                        <option value="Bachelor">Bachelor</option>
+                        <option value="Master">Master</option>
+                        <option value="PhD">Doctorat</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label>😔 Statut Dépression</label>
+                    <select id="depressionFilter">
+                        <option value="all">Tous</option>
+                        <option value="depressed">Déprimé</option>
+                        <option value="not_depressed">Non déprimé</option>
+                    </select>
+                </div>
+                
+                <!-- <button id="reset-filters" class="reset-btn">🔄 Réinitialiser Filtres</button> -->
+            </div>
+            
+            <div class="sidebar-stats">
+                <h3>📈 STATISTIQUES GLOBALES</h3>
+                <div class="stat-item">
+                    <span class="stat-label">Étudiants</span>
+                    <span class="stat-value" id="total-students">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Taux Dépression</span>
+                    <span class="stat-value" id="depression-rate">0%</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Moyenne CGPA</span>
+                    <span class="stat-value" id="avg-cgpa">0.0</span>
+                </div>
             </div>
         </aside>
 
-        <main class="main-content" id="overview-page">
+        <!-- Main Content -->
+        <main class="main-content">
             <header class="header">
-                <h1>Global Student Analytics</h1>
-                <div class="user-info">Projet Master Data Science</div>
+                <h1>📊 Dashboard Santé Mentale Étudiante</h1>
+                <div class="user-info">Analyse interactive des facteurs de dépression chez les étudiants</div>
             </header>
 
-            <section class="kpi-row" id="kpi-container"></section>
-
-            <div class="charts-grid">
-                <div class="chart-card">
-                    <div class="card-header">Clustering des vulnérabilités (PCA)</div>
-                    <div id="cluster-chart" class="chart-container"></div>
+            <!-- SECTION 1: KPIs -->
+            <div class="kpi-row">
+                <div class="kpi-card">
+                    <div class="kpi-label">Total Étudiants</div>
+                    <div class="kpi-value" id="kpi-total">0</div>
+                    <div class="kpi-subtext">Actuellement filtré</div>
                 </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Taux Dépression</div>
+                    <div class="kpi-value" id="kpi-depression">0%</div>
+                    <div class="kpi-subtext">Moyenne actuelle</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">CGPA Moyen</div>
+                    <div class="kpi-value" id="kpi-cgpa">0.0</div>
+                    <div class="kpi-subtext">Performance académique</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Satisfaction</div>
+                    <div class="kpi-value" id="kpi-satisfaction">0.0</div>
+                    <div class="kpi-subtext">/5 - Moyenne études</div>
+                </div>
+            </div>
+
+            <!-- LIGNE 1: 3 Visualisations -->
+            <div class="charts-grid">
+                <!-- 1. Pie Chart de Dépression -->
                 <div class="chart-card">
-                    <div class="card-header">Profil de l'étudiant sélectionné</div>
+                    <div class="card-header">
+                        <h3>📊 Distribution de la Dépression</h3>
+                        <!-- <div class="chart-controls">
+                            <select id="pie-display">
+                                <option value="percentage">Pourcentages</option>
+                                <option value="count">Nombres absolus</option>
+                            </select>
+                            <button id="export-pie" class="export-btn">📥</button>
+                        </div> -->
+                    </div>
+                    <div id="depression-pie" class="chart-container"></div>
+                    <div class="chart-footer">
+                        <div id="pie-legend"></div>
+                    </div>
+                </div>
+
+
+
+                <!-- 3. Radar Chart -->
+                <div class="chart-card">
+                    <div class="card-header">
+                        <h3>🎯 Profil Moyen des Étudiants</h3>
+                        <div class="chart-controls">
+                            <select id="radar-type">
+                                <option value="all">Tous les étudiants</option>
+                                <option value="depressed">Étudiants déprimés</option>
+                                <option value="not_depressed">Étudiants non déprimés</option>
+                            </select>
+                        </div>
+                    </div>
                     <div id="radar-chart" class="chart-container"></div>
                 </div>
+            </div>
+
+                            <!-- 2. Tableau des villes -->
+                <div class="chart-card">
+                    <div class="card-header">
+                        <h3>🏙️ Performance par Ville</h3>
+                        <div class="chart-controls">
+                            <select id="table-sort">
+                                <option value="city">Trier par Ville</option>
+                                <option value="satisfaction">Trier par Satisfaction</option>
+                                <option value="cgpa">Trier par CGPA</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="city-table" class="table-container">
+                        <!-- Tableau dynamique -->
+                    </div>
+                </div>
+            <!-- LIGNE 2: 2 Visualisations -->
+            <div class="charts-grid">
+                <!-- 4. Bar Chart Multivarié -->
+                <div class="chart-card">
+                    <div class="card-header">
+                        <h3>📈 Analyse des Facteurs de Risque</h3>
+                        <div class="chart-controls">
+                            <select id="bar-group">
+                                <option value="gender">Grouper par Genre</option>
+                                <option value="depression">Grouper par Dépression</option>
+                                <option value="city">Grouper par Ville</option>
+                            </select>
+                            <button id="toggle-stack" class="control-btn">📊 Empiler/Désempiler</button>
+                        </div>
+                    </div>
+                    <div id="multi-bar-chart" class="chart-container"></div>
+                    <div class="chart-footer">
+                        <div id="bar-legend"></div>
+                        <button id="export-bar" class="export-btn">📥 Exporter</button>
+                    </div>
+                </div>
+
+                <!-- 5. Carte de l'Inde -->
+                <div class="chart-card">
+                    <div class="card-header">
+                        <h3>🗺️ Distribution Géographique</h3>
+                        <div class="chart-controls">
+                            <select id="map-metric">
+                                <option value="depression">Taux de Dépression</option>
+                                <option value="cgpa">CGPA Moyen</option>
+                                <option value="satisfaction">Satisfaction Moyenne</option>
+                                <option value="count">Nombre d'Étudiants</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="us-map" class="chart-container"></div>
+                    <div class="chart-footer">
+                        <div id="map-legend"></div>
+                        <button id="export-map" class="export-btn">📥 Exporter</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION: Insights Automatiques -->
+            <div class="chart-card full-width">
+                <div class="card-header">
+                    <h3>💡 Insights Automatiques</h3>
+                    <div class="chart-controls">
+                        <select id="insight-type">
+                            <option value="correlations">Correlations</option>
+                            <option value="trends">Tendances</option>
+                            <option value="anomalies">Anomalies</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="insights-container" class="insights-container">
+                    <div class="insight-card">
+                        <div class="insight-icon">📊</div>
+                        <div class="insight-content">
+                            <h4>Corrélations Clés</h4>
+                            <p id="correlation-text">Chargement des corrélations...</p>
+                        </div>
+                    </div>
+                    <div class="insight-card">
+                        <div class="insight-icon">⚠️</div>
+                        <div class="insight-content">
+                            <h4>Risques Identifiés</h4>
+                            <p id="risk-text">Analyse des risques en cours...</p>
+                        </div>
+                    </div>
+                    <div class="insight-card">
+                        <div class="insight-icon">🎯</div>
+                        <div class="insight-content">
+                            <h4>Recommandations</h4>
+                            <p id="recommendation-text">Génération des recommandations...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION: Export et Rapport -->
+            <div class="chart-footer full-width">
+                <div class="export-options">
+                    <button id="export-dashboard" class="action-btn">📊 Exporter Dashboard Complet</button>
+                    <button id="generate-report" class="action-btn">📋 Générer Rapport PDF</button>
+                    <button id="share-insights" class="action-btn">📤 Partager Insights</button>
+                </div>
+            </div>
+
+            <!-- Loading Overlay -->
+            <div id="loading-overlay">
+                <div class="loading-spinner"></div>
+                <p>Chargement des données et initialisation du dashboard...</p>
             </div>
         </main>
     </div>
 
-    <script type="module" src="js/index.js"></script>
+    <!-- Scripts -->
+    <script src="js/utils.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/dashboard.js"></script>
+    
+    <!-- Charts -->
+    <script src="js/charts_dash/pieChart.js"></script>
+    <script src="js/charts_dash/cityTable.js"></script>
+    <script src="js/charts_dash/radarChart.js"></script>
+    <script src="js/charts_dash/multiBarChart.js"></script>
+    <script src="js/charts_dash/indiaMap.js"></script>
+    <script src="js/charts_dash/dashboardState.js"></script>
+    <script src="js/charts_dash/insights.js"></script>
 </body>
 </html>
