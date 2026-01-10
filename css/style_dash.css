@@ -514,3 +514,10 @@ body {
     background: #4338ca;
 }
 
+.info-button:hover {
+    background: #2563eb;
+}
+
+.info-box {
+    transition: opacity 0.3s ease;
+}

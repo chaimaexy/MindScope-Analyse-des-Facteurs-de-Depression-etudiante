@@ -41,7 +41,20 @@ function initPieChart() {
     
     // Événement d'export
     document.getElementById('export-pie')?.addEventListener('click', exportPieChart);
-    
+
+    CommentButton.attach({
+        container: document
+        .querySelector('#depression-pie')
+        .closest('.chart-card'),
+        content: `
+            <strong>📊 Distribution de la dépression</strong><br/><br/>
+            Ce graphique montre la répartition des étudiants
+            selon leur statut de dépression.<br/><br/>
+            Les valeurs sont recalculées dynamiquement
+            selon les filtres sélectionnés.
+        `
+    });
+
     pieChartInitialized = true;
 }
 
@@ -124,6 +137,8 @@ function updatePieChart() {
             const percentage = (d.data.value / stats.total * 100).toFixed(1);
             return `${percentage}%`;
         });
+
+   
     
     // Mettre à jour la légende
     updatePieLegend(pieData, stats);

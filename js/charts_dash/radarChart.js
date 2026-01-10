@@ -19,6 +19,18 @@ function initRadarChart() {
         .append('svg')
         .attr('width', width)
         .attr('height', height);
+
+     CommentButton.attach({
+        container: document.querySelector('#radar-chart').closest('.chart-card'),
+        content: `
+            <strong>📡 Profil radar</strong><br/><br/>
+            Ce graphique compare plusieurs dimensions
+            du bien-être étudiant (pression académique,
+            sommeil, stress financier, etc.).<br/><br/>
+            Les valeurs sont normalisées sur une échelle
+            commune pour permettre la comparaison.
+        `
+    });
     
     radarChart = {
         svg,
@@ -36,7 +48,7 @@ function initRadarChart() {
             updateRadarChart();
         });
     }
-    
+
     radarChartInitialized = true;
 }
 

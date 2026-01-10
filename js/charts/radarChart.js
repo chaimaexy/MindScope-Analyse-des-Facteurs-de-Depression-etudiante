@@ -106,7 +106,7 @@ function createRadarChart(container, features) {
         .attr('width', width)
         .attr('height', height)
         .attr('class', 'radar-svg');
-    
+
     // Groupe principal centré
     const g = svg.append('g')
         .attr('transform', `translate(${width/2}, ${height/2})`);
