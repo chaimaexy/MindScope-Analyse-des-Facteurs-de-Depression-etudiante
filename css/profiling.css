@@ -186,6 +186,9 @@
     padding: 10px;
 }
 
+.large-heatmap {
+    overflow: visible !important;
+}
 .outlier-card {
     padding: 15px;
     background: white;
@@ -755,4 +758,279 @@
     color: #1e40af;
 }
 
+/* css/radar.css */
+.radar-svg {
+    width: 100%;
+    height: 100% !important;
+    display: block;
+}
+
+.radar-area {
+    transition: opacity 0.3s ease;
+}
+
+.radar-area:hover {
+    opacity: 0.8;
+}
+
+.radar-point {
+    transition: r 0.3s ease;
+}
+
+.radar-point:hover {
+    r: 6px !important;
+    cursor: pointer;
+}
+
+.radar-label {
+    user-select: none;
+    pointer-events: none;
+}
+
+.radar-circle-grid {
+    stroke-dasharray: 3,3;
+}
+
+.radar-axis {
+    stroke-dasharray: 2,2;
+}
+
+.radar-title {
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.radar-legend text {
+    font-size: 12px;
+    fill: #64748b;
+}
+
+.radar-level-label {
+    font-size: 10px;
+    fill: #94a3b8;
+}
+.radar-svg g {
+    transform-origin: center;
+}
+/* css/heatmap.css - Styles pour la légende */
+
+/* Styles de base pour la heatmap */
+.heatmap-svg {
+    font-family: 'Inter', sans-serif;
+}
+
+.heatmap-cell {
+    transition: stroke 0.2s ease;
+}
+
+.heatmap-cell:hover {
+    stroke: #1e293b !important;
+    stroke-width: 2px !important;
+    cursor: pointer;
+}
+
+/* Légende des couleurs */
+.color-legend {
+    pointer-events: none;
+}
+
+.legend-title {
+    font-weight: 500;
+    fill: #475569;
+}
+
+.legend-label {
+    fill: #64748b;
+}
+
+/* Version compacte de la légende */
+.compact-color-legend {
+    pointer-events: none;
+}
+
+/* Tooltip amélioré */
+.heatmap-tooltip {
+   position: absolute !important;
+    background: white !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
+    font-family: 'Inter', sans-serif !important;
+    padding: 12px !important;
+    max-width: 250px !important;
+    z-index: 9999 !important; /* Augmentez le z-index */
+    pointer-events: none !important;
+    opacity: 0; /* Initialement caché */
+    transition: opacity 0.2s ease !important;
+    font-size: 13px !important;
+    line-height: 1.4 !important;
+}
+
+.heatmap-tooltip div {
+    margin-bottom: 5px !important;
+}
+.heatmap-tooltip strong {
+    color: #1e293b !important;
+    font-weight: 600 !important;
+}
+
+/* 3. Flèche du tooltip */
+.heatmap-tooltip::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    transform: translateX(-50%) rotate(45deg);
+    width: 12px;
+    height: 12px;
+    background: white;
+    border-left: 1px solid #e2e8f0;
+    border-top: 1px solid #e2e8f0;
+    z-index: 9998;
+}
+
+/* 4. S'assurer que le conteneur de la heatmap permet le débordement */
+#cluster-heatmap {
+    overflow: visible !important; /* IMPORTANT: permet au tooltip de sortir */
+    position: relative;
+}
+.heatmap-cell {
+    transition: stroke 0.2s ease, stroke-width 0.2s ease;
+    cursor: pointer;
+}
+
+.heatmap-cell:hover {
+    stroke: #4f46e5 !important;
+    stroke-width: 2px !important;
+}
+
+/* 6. Assurer que le SVG n'a pas d'overflow caché */
+.heatmap-svg {
+    overflow: visible !important;
+}
+.heatmap-tooltip::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid white;
+}
+
+/* Labels */
+.x-label, .y-label {
+    font-weight: 500;
+    fill: #475569;
+}
+
+.heatmap-title {
+    font-weight: 600;
+    fill: #1e293b;
+}
+
+.bubble-chart {
+    width: 100%;
+    height: 800px;
+    background: #f8fafc;
+    border-radius: 8px;
+    position: relative;
+}
+
+.bubble-tooltip {
+    position: absolute;
+    padding: 12px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 100;
+    max-width: 300px;
+    border: 1px solid #e5e7eb;
+}
+
+.bubble-node {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.bubble-node:hover {
+    stroke: #000;
+    stroke-width: 2px;
+    filter: brightness(1.1);
+}
+
+.bubble-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-anchor: middle;
+    pointer-events: none;
+    fill: white;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+.cluster-stats {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #666;
+}
+
+.cluster-stats div {
+    display: flex;
+    justify-content: space-between;
+    margin: 2px 0;
+}
+
+.legend-container {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    background: white;
+    padding: 10px 15px;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    font-size: 12px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin: 5px 0;
+}
+
+.legend-color {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.risk-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+.risk-high {
+    background: #dc2626;
+    color: white;
+}
+
+.risk-medium {
+    background: #f59e0b;
+    color: white;
+}
+
+.risk-low {
+    background: #16a34a;
+    color: white;
+}
 

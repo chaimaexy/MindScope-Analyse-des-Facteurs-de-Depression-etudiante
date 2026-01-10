@@ -81,7 +81,8 @@ function preprocessStudentData(rawData) {
                 id: parseNumber(row.id, index + 1),
                 gender: (row.Gender || row.gender || 'Unknown').toString().trim(),
                 age: parseNumber(row.Age || row.age, 20),
-                city: (row.City || row.city || 'Unknown').toString().trim(),
+                city: Utils.normalizeIndianCity((row.City || row.city || '').toString().trim()),
+                city_original: (row.City || row.city || '').toString().trim(),
                 profession: (row.Profession || row.profession || 'Student').toString().trim(),
                 academic_pressure: parseNumber(row['Academic Pressure'] || row.academic_pressure, 3),
                 work_pressure: parseNumber(row['Work Pressure'] || row.work_pressure, 0),
@@ -91,7 +92,18 @@ function preprocessStudentData(rawData) {
                 sleep_duration: Utils.mapScore(row['Sleep Duration'] || row.sleep_duration),
                 dietary_habits: Utils.mapScore(row['Dietary Habits'] || row.dietary_habits),
                 degree: (row.Degree || row.degree || 'Unknown').toString().trim(),
-                hasSuicidalThoughts: (row['Have you ever had suicidal thoughts ?'] || '').toString().trim().toLowerCase() === 'yes',
+              hasSuicidalThoughts: (function() {
+    const value = row['Have you ever had suicidal thoughts ?'] || row['Have you ever had suicidal thoughts?'];
+    
+    if (value === undefined || value === null || value === '') {
+        return false; // Convertir en booléen, pas en chaîne
+    }
+    
+    const strVal = value.toString().trim().toLowerCase();
+    
+    // IMPORTANT: Retourner un BOOLÉEN, pas une chaîne
+    return strVal === 'yes' || strVal === 'true' || strVal === '1' || strVal === 'oui';
+})(),
                 work_study_hours: parseNumber(row['Work/Study Hours'] || row.work_study_hours, 8),
                 financial_stress: parseNumber(row['Financial Stress'] || row.financial_stress, 3),
                 family_history: (row['Family History of Mental Illness'] || '').toString().trim().toLowerCase() === 'yes',
@@ -162,11 +174,13 @@ function calculateWellnessScore(student) {
 }
 
 // Configurer les filtres
- function setupFilters(onFilterChange) {
+ // Configurer les filtres
+function setupFilters(onFilterChange) {
     const filterState = {
         gender: 'all',
         degree: 'all',
         depression: 'all',
+        city: 'all', // AJOUTÉ ICI
         ageRange: [18, 40],
         cgpaRange: [0, 10]
     };
@@ -186,6 +200,43 @@ function calculateWellnessScore(student) {
         filterState.depression = e.target.value;
         applyFilters();
     });
+    
+    // AJOUTÉ ICI: Événement pour le filtre ville
+    document.getElementById('cityFilter').addEventListener('change', (e) => {
+        filterState.city = e.target.value;
+        applyFilters();
+    });
+    
+    // Fonction pour peupler le filtre ville
+    function populateCityFilter() {
+        const cityFilter = document.getElementById('cityFilter');
+        if (!cityFilter) return;
+        
+        // Nettoyer les options existantes (sauf "Toutes les villes")
+        cityFilter.innerHTML = '<option value="all">Toutes les villes</option>';
+        
+        // Récupérer toutes les villes uniques
+        const allCities = [...new Set(studentData.map(d => d.city))];
+        const validCities = allCities.filter(city => 
+            city && city !== 'Unknown' && city !== 'unknown' && city.trim() !== ''
+        );
+        
+        // Trier les villes par ordre alphabétique
+        validCities.sort((a, b) => a.localeCompare(b, 'fr'));
+        
+        // Ajouter chaque ville comme option
+        validCities.forEach(city => {
+            const option = document.createElement('option');
+            option.value = city;
+            option.textContent = city;
+            cityFilter.appendChild(option);
+        });
+        
+        console.log(`Filtre ville initialisé avec ${validCities.length} villes`);
+    }
+    
+    // Appeler la fonction après le chargement des données
+    setTimeout(populateCityFilter, 100);
     
     // Appliquer les filtres
     function applyFilters() {
@@ -215,6 +266,11 @@ function calculateWellnessScore(student) {
             );
         }
         
+        // AJOUTÉ ICI: Filtre ville
+        if (filterState.city !== 'all') {
+            filtered = filtered.filter(d => d.city === filterState.city);
+        }
+        
         // Appeler le callback avec les données filtrées
         if (onFilterChange) {
             onFilterChange(filtered);
@@ -234,14 +290,18 @@ function calculateWellnessScore(student) {
             filterState.gender = 'all';
             filterState.degree = 'all';
             filterState.depression = 'all';
+            filterState.city = 'all'; // AJOUTÉ ICI
+            
             document.getElementById('genderFilter').value = 'all';
             document.getElementById('degreeFilter').value = 'all';
             document.getElementById('depressionFilter').value = 'all';
+            document.getElementById('cityFilter').value = 'all'; // AJOUTÉ ICI
+            
             return applyFilters();
-        }
+        },
+        getCurrentFilters: () => ({ ...filterState }) // Pour déboguer
     };
 }
-
 // Obtenir les données
  function getStudentData() {
     return studentData;
@@ -262,5 +322,140 @@ function getBasicStats() {
         suicidalRate: (suicidal / total) * 100,
         avgAge: d3.mean(studentData, d => d.age),
         avgCGPA: d3.mean(studentData, d => d.cgpa)
+    };
+}
+function normalizeIndianCity(cityName) {
+    const cityMap = {
+        'Mumbai': 'Mumbai',
+        'Bombay': 'Mumbai',
+        'Delhi': 'Delhi',
+        'New Delhi': 'Delhi',
+        'Bangalore': 'Bangalore',
+        'Bengaluru': 'Bangalore',
+        'Chennai': 'Chennai',
+        'Madras': 'Chennai',
+        'Kolkata': 'Kolkata',
+        'Calcutta': 'Kolkata',
+        'Pune': 'Pune',
+        'Ahmedabad': 'Ahmedabad',
+        'Hyderabad': 'Hyderabad',
+        'Jaipur': 'Jaipur',
+        'Lucknow': 'Lucknow'
+    };
+    
+    return cityMap[cityName] || cityName;
+}
+
+// =============================
+// AJOUTER CES LIGNES À LA FIN
+// =============================
+
+// Exposer les fonctions globalement pour dashboard.js et profile.js
+window.loadData = loadData;
+window.getStudentData = getStudentData;
+window.getBasicStats = getBasicStats;
+window.setupFilters = setupFilters;
+
+// Exposer Utils globalement
+window.Utils = Utils;
+
+// Initialiser les données au chargement de la page
+document.addEventListener('DOMContentLoaded', async function() {
+    console.log('DOM chargé, initialisation des données...');
+    
+    try {
+        // Vérifier si nous sommes sur index.html ou profils.html
+        const currentPage = window.location.pathname;
+        const isDashboard = currentPage.includes('index.html') || currentPage === '/' || 
+                           currentPage.includes('dashboard');
+        const isProfils = currentPage.includes('profils.html');
+        
+        console.log('Page détectée:', currentPage, 'Dashboard:', isDashboard, 'Profils:', isProfils);
+        
+        // Si nous ne sommes ni sur le dashboard ni sur les profils, ne rien faire
+        if (!isDashboard && !isProfils) {
+            console.log('Page non reconnue, arrêt de l\'initialisation');
+            return;
+        }
+        
+        // Initialiser les données globales
+        console.log('Chargement des données...');
+        await loadData();
+        console.log('Données initialisées avec succès:', studentData.length, 'étudiants');
+        
+        // Attendre un peu pour s'assurer que les autres scripts sont chargés
+        setTimeout(() => {
+            // Initialiser la page appropriée
+            if (isDashboard && typeof initDashboard === 'function') {
+                console.log('Initialisation du dashboard...');
+                initDashboard();
+            } else if (isProfils && typeof initProfiling === 'function') {
+                console.log('Initialisation du profiling...');
+                initProfiling();
+            } else {
+                console.warn('Fonction d\'initialisation non disponible pour cette page');
+                
+                // Afficher un message d'erreur
+                const loadingOverlay = document.getElementById('loading-overlay');
+                if (loadingOverlay) {
+                    loadingOverlay.innerHTML = `
+                        <div style="text-align: center;">
+                            <div style="color: #f59e0b; font-size: 48px; margin-bottom: 20px;">⚠️</div>
+                            <h3 style="color: #1e293b; margin-bottom: 10px;">Attention</h3>
+                            <p style="color: #64748b;">Les données sont chargées mais l\'interface n\'est pas initialisée.</p>
+                            <button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                Réessayer
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+        }, 100); // Petit délai pour s'assurer que tous les scripts sont chargés
+        
+    } catch (error) {
+        console.error('Erreur lors de l\'initialisation:', error);
+        
+        // Afficher une erreur dans l'interface
+        const loadingOverlay = document.getElementById('loading-overlay');
+        if (loadingOverlay) {
+            loadingOverlay.innerHTML = `
+                <div style="text-align: center;">
+                    <div style="color: #ef4444; font-size: 48px; margin-bottom: 20px;">❌</div>
+                    <h3 style="color: #1e293b; margin-bottom: 10px;">Erreur de chargement</h3>
+                    <p style="color: #64748b; margin-bottom: 10px;">${error.message || 'Erreur inconnue'}</p>
+                    <p style="color: #94a3b8; font-size: 12px; margin-bottom: 20px;">Vérifiez la console pour plus de détails</p>
+                    <button onclick="location.reload()" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                        Recharger la page
+                    </button>
+                </div>
+            `;
+        } else {
+            alert('Erreur lors du chargement des données: ' + (error.message || 'Erreur inconnue'));
+        }
+    }
+});
+
+// Fonction de clustering de secours (si non définie ailleurs)
+if (typeof window.performClustering === 'undefined') {
+    console.log('Définition de performClustering de secours dans main.js');
+    window.performClustering = function(data, k = 4) {
+        console.log('Clustering de secours sur', data.length, 'données');
+        
+        if (!data || data.length === 0) {
+            return Array(k).fill().map(() => []);
+        }
+        
+        // Simple clustering aléatoire
+        data.forEach((d, i) => {
+            d.cluster_id = i % k;
+        });
+        
+        const clusterArrays = Array(k).fill().map(() => []);
+        data.forEach(d => {
+            clusterArrays[d.cluster_id].push(d);
+        });
+        
+        console.log('Clustering de secours terminé');
+        return clusterArrays;
     };
 }

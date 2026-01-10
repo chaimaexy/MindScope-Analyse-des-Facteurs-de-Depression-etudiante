@@ -54,15 +54,19 @@
                         <option value="not_depressed">Non déprimé</option>
                     </select>
                 </div>
+                <div class="filter-group">
+    <label>Ville</label>
+    <select id="cityFilter">
+        <option value="all">Toutes les villes</option>
+        <!-- Les options seront ajoutées dynamiquement -->
+    </select>
+</div>
             </div>
         </aside>
 
         <!-- Main Content -->
         <main class="main-content">
-            <header class="header">
-                <h1>🔍 Explorateur de Profils Évolué</h1>
-                <div class="user-info">Analyse multi-dimensionnelle des clusters étudiants</div>
-            </header>
+           
 
             <!-- SECTION 1: KPIs en Temps Réel -->
             <div class="kpi-row" id="profile-kpis">
@@ -111,10 +115,7 @@
                 <div id="cluster-map" class="chart-container interactive"></div>
                 <div class="chart-footer">
                     <div class="cluster-legend" id="cluster-legend"></div>
-                    <div class="export-buttons">
-                        <button id="exportMapSVG" class="export-btn">📥 Exporter SVG</button>
-                        <button id="exportMapPNG" class="export-btn">📥 Exporter PNG</button>
-                    </div>
+                    
                 </div>
             </div>
 
@@ -127,7 +128,7 @@
                             <select id="comparison-mode">
                                 <option value="cluster-vs-global">Cluster vs Global</option>
                                 <option value="student-vs-cluster">Étudiant vs Cluster</option>
-                                <option value="two-clusters">Deux Clusters</option>
+                               
                             </select>
                         </div>
                     </div>
@@ -135,10 +136,7 @@
                         <!-- Dynamiquement rempli -->
                     </div>
                     <div id="profile-radar" class="chart-container"></div>
-                    <div class="chart-footer">
-                        <button id="exportRadarSVG" class="export-btn">📥 Exporter SVG</button>
-                        <button id="exportRadarPNG" class="export-btn">📥 Exporter PNG</button>
-                    </div>
+                    
                 </div>
 
                 <!-- SECTION 4: Détails du Cluster Sélectionné -->
@@ -162,50 +160,30 @@
 
             <!-- SECTION 5: Small Multiples -->
             <div class="chart-card full-width">
-                <div class="card-header">
-                    <h3>📈 Distributions Clés par Cluster</h3>
-                    <div class="chart-controls">
-                        <select id="distribution-variable">
-                            <option value="sleep_duration">Durée de Sommeil</option>
-                            <option value="academic_pressure">Pression Académique</option>
-                            <option value="financial_stress">Stress Financier</option>
-                            <option value="study_satisfaction">Satisfaction Études</option>
-                        </select>
-                    </div>
-                </div>
-                <div id="cluster-distributions" class="small-multiples"></div>
-            </div>
+    <div class="card-header">
+        <h3>🎯 Vue d'ensemble des Clusters</h3>
+        <div class="chart-controls">
+            
+            
+        </div>
+    </div>
+    <div id="bubble-chart-container" class="bubble-chart">
+        <div id="bubble-tooltip" class="bubble-tooltip"></div>
+    </div>
+</div>
 
             <!-- SECTION 6: Étudiants Atypiques -->
             <div class="chart-card full-width">
                 <div class="card-header">
-                    <h3>⚠️ Étudiants Atypiques (Outliers)</h3>
+                    <h3> Étudiants Atypiques (Outliers)</h3>
                     <div class="chart-controls">
-                        <select id="outlier-metric">
-                            <option value="mahalanobis">Distance de Mahalanobis</option>
-                            <option value="isolation">Forêt d'Isolation</option>
-                            <option value="zscore">Score Z Combiné</option>
-                        </select>
+                        
                     </div>
                 </div>
                 <div id="outliers-list" class="outliers-container"></div>
             </div>
-
-            <!-- SECTION 7: Recommandations (Modal) -->
-            <div id="recommendations-modal" class="modal">
-                <div class="modal-content">
-                    <span class="close-modal">&times;</span>
-                    <h3>🎯 Plan d'Action Recommandé</h3>
-                    <div id="action-plan"></div>
-                    <button id="export-plan" class="action-btn">📥 Exporter le Plan</button>
-                </div>
-            </div>
-
             <!-- Loading Overlay -->
-            <div id="loading-overlay">
-                <div class="loading-spinner"></div>
-                <p>Analyse des profils en cours...</p>
-            </div>
+            
         </main>
     </div>
 
@@ -219,5 +197,6 @@
     <script src="js/charts/outliers.js"></script>
     <script src="js/profile.js"></script>
     <script src="js/main.js"></script>
+    <script src="js/charts/SunburstChart.js"></script>
 </body>
 </html>
