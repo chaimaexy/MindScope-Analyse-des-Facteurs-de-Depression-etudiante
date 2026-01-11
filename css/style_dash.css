@@ -946,3 +946,37 @@ body {
 
 
 
+#radar-chart {
+    width: 100%;
+    height: 400px; /* Adjust height as needed */
+    min-height: 350px;
+    margin-top: 20px; /* Add space above the chart */
+    padding-top: 40px; /* Add padding for the title */
+    position: relative; /* Ensure the chart is positioned correctly */
+}
+
+#radar-chart-title {
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 10px; /* Add space between the title and the chart */
+    color: var(--text-main); /* Use a consistent color */
+}
+
+#radar-chart {
+    width: 100%;
+    height: 400px; /* Adjust height as needed */
+    min-height: 350px;
+    margin-top: 10px; /* Space between the title and the chart */
+    padding: 0; /* Remove unnecessary padding */
+    position: relative;
+}
+
+#radar-chart-title {
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+    margin: 0; /* Reset margins */
+    padding: 10px 0; /* Add padding for better spacing */
+    color: var(--text-main);
+}
