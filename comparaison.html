@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lumina | Interactions & Combinaisons</title>
+
+  <link rel="stylesheet" href="css/style_dash.css" />
+  <link rel="stylesheet" href="css/interactions.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+</head>
+
+<body>
+  <div class="dashboard-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo-icon">L</div>
+        <h2>LUMINA</h2>
+      </div>
+
+      <nav class="menu">
+        <a href="index.html" class="menu-item"><span>📊</span> Vue d'ensemble</a>
+        <a href="profils.html" class="menu-item"><span>👥</span> Profils</a>
+        <a href="comparaison.html" class="menu-item"><span>⚖️</span> Comparaisons</a>
+        <a href="interactions.html" class="menu-item active"><span>🔄</span> Interactions</a>
+      </nav>
+
+      <div class="filters-section">
+        <h3>FACTEURS D'INTERACTION</h3>
+
+        <div class="filter-group">
+          <label>📈 Facteur X</label>
+          <select id="factor-x"></select>
+        </div>
+
+        <div class="filter-group">
+          <label>📉 Facteur Y</label>
+          <select id="factor-y"></select>
+        </div>
+
+        <div class="filter-group">
+          <label>⚡ Seuil Critique</label>
+          <input type="range" id="risk-threshold" min="10" max="90" step="5" value="50">
+          <div class="threshold-display" id="threshold-value">50%</div>
+        </div>
+
+        <button id="analyze-btn" class="reset-btn">🔍 Analyser Interactions</button>
+        <button id="reset-btn" class="reset-btn">🔄 Réinitialiser</button>
+      </div>
+
+      <div class="sidebar-stats">
+        <h3>INDICATEURS</h3>
+        <div class="stat-item">
+          <span class="stat-label">Risque Max</span>
+          <span class="stat-value" id="max-risk">—</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Interaction</span>
+          <span class="stat-value" id="interaction-strength">—</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="header">
+        <h1>Interactions & Combinaisons de Facteurs</h1>
+        <div class="user-info">Analyse des effets combinés sur le risque de dépression</div>
+      </header>
+
+      <!-- Heatmap Interactive -->
+      <div class="chart-card full-width">
+        <div class="card-header">
+          <h3>📊 Heatmap Interactive des Interactions</h3>
+          <div class="chart-controls">
+            <div class="btn" id="refresh-heatmap">🔄 Actualiser</div>
+          </div>
+        </div>
+
+        <div class="chart-description">
+          <p><strong>Question centrale : quels facteurs se renforcent ou se compensent ?</strong><br>
+            Explorez comment la combinaison de deux facteurs affecte le risque de dépression.
+            Cliquez sur une cellule pour tester cette combinaison dans le simulateur.</p>
+        </div>
+
+        <div id="heatmap-container" class="chart-container"></div>
+      </div>
+
+      <!-- 2 colonnes : Simulateur + Insights -->
+      <div class="charts-grid double">
+        <!-- Simulateur -->
+        <div class="chart-card">
+          <div class="card-header">
+            <h3>🧪 Simulateur de Risque</h3>
+          </div>
+
+          <div class="simulator">
+            <div class="simulator-slider">
+              <label>
+                <span id="factor-x-label-text">Facteur X</span>:
+                <span id="sim-x-value">3</span>
+              </label>
+              <input type="range" id="sim-x" min="1" max="5" step="1" value="3">
+            </div>
+
+            <div class="simulator-slider">
+              <label>
+                <span id="factor-y-label-text">Facteur Y</span>:
+                <span id="sim-y-value">3</span>
+              </label>
+              <input type="range" id="sim-y" min="1" max="5" step="1" value="3">
+            </div>
+
+            <div class="simulator-result">
+              <div class="risk-value" id="risk-value">Risque estimé: —</div>
+              <div class="risk-label" id="risk-label">—</div>
+            </div>
+
+            <div class="simulator-insight">
+              <p id="simulator-insight-text">Ajustez les curseurs pour voir l'effet sur le risque de dépression.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Insights -->
+        <div class="chart-card">
+          <div class="card-header">
+            <h3>💡 Insights Automatiques</h3>
+          </div>
+
+          <div class="insights-grid">
+            <div class="insight-item">
+              <div class="insight-icon danger">⚠️</div>
+              <div class="insight-text">
+                <h4>Combinaisons Dangereuses</h4>
+                <p id="danger-combinations">Analyse en cours...</p>
+              </div>
+            </div>
+
+            <div class="insight-item">
+              <div class="insight-icon safe">🛡️</div>
+              <div class="insight-text">
+                <h4>Combinaisons Sûres</h4>
+                <p id="safe-combinations">Analyse en cours...</p>
+              </div>
+            </div>
+
+            <div class="insight-item">
+              <div class="insight-icon threshold">⚡</div>
+              <div class="insight-text">
+                <h4>Seuils Critiques</h4>
+                <p id="thresholds-text">Analyse en cours...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Extra graphs -->
+      <div class="charts-grid double">
+        <!-- Bar chart -->
+        <div class="chart-card">
+          <div class="card-header">
+            <h3>📌 Taux de dépression par catégorie</h3>
+            <div class="chart-controls">
+              <select id="group-by"></select>
+            </div>
+          </div>
+          <div id="bar-container" class="chart-container"></div>
+        </div>
+
+        <!-- Histogram -->
+        <div class="chart-card">
+          <div class="card-header">
+            <h3>📈 Distribution (numérique) vs Dépression</h3>
+            <div class="chart-controls">
+              <select id="numeric-var"></select>
+            </div>
+          </div>
+          <div id="hist-container" class="chart-container"></div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="js/interactions.js"></script>
+</body>
+</html>
