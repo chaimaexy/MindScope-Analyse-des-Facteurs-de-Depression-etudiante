@@ -247,11 +247,17 @@ function createSunburstChart(container, data, clusters) {
     }
     
     function selectCluster(clusterId) {
-        console.log('Cluster sélectionné:', clusterId);
-        
-        // Vous pouvez ajouter ici une fonction pour mettre à jour d'autres visualisations
-        // window.dispatchEvent(new CustomEvent('clusterSelected', { detail: clusterId }));
-    }
+    console.log('Cluster sélectionné depuis Sunburst:', clusterId);
+    
+    // 1. Dispatcher un événement global
+    const event = new CustomEvent('sunburstClusterSelected', { 
+        detail: { clusterId: clusterId } 
+    });
+    window.dispatchEvent(event);
+    
+    // 2. (Optionnel) Mettre à jour la légende si nécessaire)
+    updateLegendSelection(clusterId);
+}
     
     console.log('✅ Sunburst chart créé avec succès');
 }

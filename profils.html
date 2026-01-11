@@ -181,6 +181,33 @@
                 </div>
                 <div id="outliers-list" class="outliers-container"></div>
             </div>
+
+            <div class="chart-card full-width" id="cluster-detail-section" style="display: none;">
+
+
+                <div class="chart-card full-width" id="scalableVecOutlier">
+    <div class="card-header">
+        <h3>🎨 Visualisation SVG du Cluster Sélectionné</h3>
+        <div class="chart-controls">
+            <button id="export-svg" class="control-btn">📥 Exporter SVG</button>
+            <button id="toggle-view" class="control-btn">🔄 Changer Vue</button>
+        </div>
+    </div>
+    <div class="svg-content-container">
+        <!-- Graphique SVG -->
+        <div class="svg-container" id="scalable-svg-container"></div>
+        
+        <!-- Liste des étudiants du cluster -->
+        <div class="cluster-students-container">
+            <h4>👥 Étudiants du Cluster</h4>
+            <div id="cluster-students-list" class="cluster-students-list"></div>
+        </div>
+    </div>
+    <div class="outliers-section">
+        <h4>⚠️ Outliers du Cluster</h4>
+        <div id="cluster-outliers-list" class="outliers-list"></div>
+    </div>
+</div>
             <!-- Loading Overlay -->
             
         </main>

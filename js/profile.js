@@ -1211,3 +1211,409 @@ function showLoading(show) {
 
 // Initialiser au chargement de la page
 document.addEventListener('DOMContentLoaded', initProfiling);
+
+
+// ============================================================================
+// FONCTIONNALITÉS AJOUTÉES : SVG CLUSTER ET SCROLL AUTOMATIQUE
+// ============================================================================
+
+/**
+ * Initialise la visualisation SVG et l'écouteur d'événements pour le sunburst
+ */
+function initializeSVGVisualization() {
+    console.log('Initialisation de la visualisation SVG...');
+    
+    // Écouter l'événement du sunburst
+    window.addEventListener('sunburstClusterSelected', (event) => {
+        const clusterId = event.detail.clusterId;
+        console.log('Événement reçu du sunburst pour cluster:', clusterId);
+        
+        if (clusterId !== undefined && clusters[clusterId]) {
+            // Sélectionner le cluster (utilise la fonction existante)
+            selectCluster(clusterId);
+            
+            // Mettre à jour la visualisation SVG
+            updateClusterSVGVisualization(clusterId);
+            
+            // Scroll vers la section SVG
+            scrollToSVGSection();
+        }
+    });
+    
+    // Initialiser les boutons d'export et de toggle
+    setupSVGControls();
+    
+    // Créer le SVG pour le cluster par défaut (0) au démarrage
+    if (clusters.length > 0) {
+        setTimeout(() => {
+            updateClusterSVGVisualization(0);
+        }, 1000);
+    }
+    
+    console.log('✅ Visualisation SVG initialisée');
+}
+
+/**
+ * Met à jour la visualisation SVG pour un cluster spécifique
+ */
+function updateClusterSVGVisualization(clusterId) {
+    console.log('Mise à jour SVG pour cluster:', clusterId);
+    
+    if (!clusters[clusterId]) {
+        console.warn('Cluster', clusterId, 'non trouvé');
+        return;
+    }
+    
+    const clusterData = clusters[clusterId];
+    
+    // 1. Créer le graphique SVG
+    if (typeof createScalableVectorGraphic === 'function') {
+        createScalableVectorGraphic('#scalable-svg-container', clusterData, clusterId);
+    } else {
+        console.warn('createScalableVectorGraphic non disponible');
+        showSVGErrorMessage('#scalable-svg-container', 'Fonction SVG non disponible');
+    }
+    
+    // 2. Afficher les étudiants du cluster
+    if (typeof displayClusterStudents === 'function') {
+        displayClusterStudents('#cluster-students-list', clusterData, clusterId);
+    } else {
+        console.warn('displayClusterStudents non disponible');
+        showSVGErrorMessage('#cluster-students-list', 'Fonction d\'affichage des étudiants non disponible');
+    }
+    
+    // 3. Afficher les outliers du cluster
+    if (typeof displayClusterOutliers === 'function') {
+        displayClusterOutliers(clusterData, '#cluster-outliers-list', CONFIG.featureKeys);
+    } else {
+        console.warn('displayClusterOutliers non disponible');
+        showSVGErrorMessage('#cluster-outliers-list', 'Fonction d\'affichage des outliers non disponible');
+    }
+    
+    // 4. Mettre à jour le titre de la section
+    updateSVGTitle(clusterId);
+}
+
+/**
+ * Fait défiler la page vers la section SVG
+ */
+function scrollToSVGSection() {
+    const section = document.getElementById('scalableVecOutlier');
+    if (section) {
+        // Petit délai pour laisser le temps à la page de se mettre à jour
+        setTimeout(() => {
+            section.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start'
+            });
+            
+            // Effet visuel de surbrillance
+            highlightSVGSection(section);
+        }, 300);
+    } else {
+        console.warn('Section scalableVecOutlier non trouvée');
+    }
+}
+
+/**
+ * Met en surbrillance la section SVG
+ */
+function highlightSVGSection(section) {
+    if (!section) return;
+    
+    // Sauvegarder les styles originaux
+    const originalBackground = section.style.backgroundColor;
+    const originalBoxShadow = section.style.boxShadow;
+    const originalTransition = section.style.transition;
+    
+    // Appliquer l'effet de surbrillance
+    section.style.transition = 'background-color 0.5s, box-shadow 0.5s';
+    section.style.backgroundColor = '#fffbeb';
+    section.style.boxShadow = '0 0 20px rgba(245, 158, 11, 0.4)';
+    
+    // Retirer l'effet après 2 secondes
+    setTimeout(() => {
+        section.style.backgroundColor = originalBackground;
+        section.style.boxShadow = originalBoxShadow;
+        
+        // Après l'animation, rétablir la transition d'origine
+        setTimeout(() => {
+            section.style.transition = originalTransition;
+        }, 500);
+    }, 2000);
+}
+
+/**
+ * Initialise les contrôles de la section SVG
+ */
+function setupSVGControls() {
+    // Bouton d'export SVG
+    const exportButton = document.getElementById('export-svg');
+    if (exportButton) {
+        exportButton.addEventListener('click', exportSVG);
+    }
+    
+    // Bouton de changement de vue
+    const toggleButton = document.getElementById('toggle-view');
+    if (toggleButton) {
+        toggleButton.addEventListener('click', toggleSVGView);
+    }
+}
+
+/**
+ * Exporte le SVG actuel
+ */
+function exportSVG() {
+    const svgElement = document.querySelector('#scalable-svg-container svg');
+    if (!svgElement) {
+        alert('Aucun graphique SVG à exporter');
+        return;
+    }
+    
+    try {
+        const serializer = new XMLSerializer();
+        let source = serializer.serializeToString(svgElement);
+        
+        // Ajouter la déclaration XML si elle n'existe pas
+        if (!source.match(/^<svg[^>]+xmlns="http:\/\/www\.w3\.org\/2000\/svg"/)) {
+            source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+        }
+        
+        source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
+        
+        const blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `cluster-${currentSelection.cluster !== null ? currentSelection.cluster + 1 : 'unknown'}-visualisation.svg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        URL.revokeObjectURL(url);
+        
+        console.log('✅ SVG exporté avec succès');
+    } catch (error) {
+        console.error('Erreur lors de l\'export SVG:', error);
+        alert('Erreur lors de l\'export du SVG');
+    }
+}
+
+/**
+ * Change la vue du SVG (simple alternance)
+ */
+let currentSVGView = 'scatter';
+function toggleSVGView() {
+    if (currentSVGView === 'scatter') {
+        currentSVGView = 'radial';
+        console.log('Changement vers vue radiale');
+        // Ici vous pourriez appeler une fonction différente pour créer un graphique radial
+    } else {
+        currentSVGView = 'scatter';
+        console.log('Changement vers vue scatter');
+        // Revenir à la vue scatter plot
+    }
+    
+    // Mettre à jour le bouton
+    const toggleButton = document.getElementById('toggle-view');
+    if (toggleButton) {
+        toggleButton.textContent = currentSVGView === 'scatter' ? '🔄 Vue Radiale' : '🔄 Vue Scatter';
+    }
+    
+    // Re-créer le SVG avec la nouvelle vue si un cluster est sélectionné
+    if (currentSelection.cluster !== null) {
+        updateClusterSVGVisualization(currentSelection.cluster);
+    }
+}
+
+/**
+ * Affiche un message d'erreur dans un conteneur SVG
+ */
+function showSVGErrorMessage(containerSelector, message) {
+    const container = d3.select(containerSelector);
+    container.selectAll('*').remove();
+    
+    container.append('div')
+        .style('display', 'flex')
+        .style('flex-direction', 'column')
+        .style('align-items', 'center')
+        .style('justify-content', 'center')
+        .style('height', '100%')
+        .style('color', '#6b7280')
+        .style('text-align', 'center')
+        .style('padding', '20px')
+        .html(`
+            <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
+            <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">Fonctionnalité temporairement indisponible</div>
+            <div style="font-size: 14px;">${message}</div>
+        `);
+}
+
+/**
+ * Met à jour le titre de la section SVG
+ */
+function updateSVGTitle(clusterId) {
+    const titleElement = document.querySelector('#scalableVecOutlier .card-header h3');
+    if (titleElement) {
+        const studentCount = clusters[clusterId] ? clusters[clusterId].length : 0;
+        const depressedCount = clusters[clusterId] ? clusters[clusterId].filter(d => d.depression === 1).length : 0;
+        const depressionRate = studentCount > 0 ? (depressedCount / studentCount * 100).toFixed(1) : 0;
+        
+        titleElement.textContent = `🎨 Cluster ${clusterId + 1} - ${studentCount} étudiants (${depressionRate}% déprimés)`;
+    }
+}
+
+/**
+ * Étend la fonction selectCluster existante pour inclure la mise à jour SVG
+ * (Surcharge douce sans remplacer la fonction existante)
+ */
+const originalSelectCluster = window.selectCluster;
+window.selectCluster = function(clusterIndex) {
+    // Appeler la fonction originale
+    if (typeof originalSelectCluster === 'function') {
+        originalSelectCluster(clusterIndex);
+    }
+    
+    // Ajouter la mise à jour SVG
+    updateClusterSVGVisualization(clusterIndex);
+};
+
+// ============================================================================
+// MODIFICATION DE LA FONCTION D'INITIALISATION PRINCIPALE
+// ============================================================================
+
+// Modifiez légèrement la fonction initProfiling pour inclure l'initialisation SVG
+const originalInitProfiling = window.initProfiling;
+window.initProfiling = async function() {
+    // Appeler la fonction originale
+    if (typeof originalInitProfiling === 'function') {
+        await originalInitProfiling();
+    }
+    
+    // Initialiser la visualisation SVG après l'initialisation principale
+    setTimeout(() => {
+        initializeSVGVisualization();
+    }, 500);
+};
+
+// ============================================================================
+// STYLES CSS DYNAMIQUES POUR LA SECTION SVG
+// ============================================================================
+
+// Ajoutez ces styles dynamiquement s'ils ne sont pas déjà dans votre CSS
+function addSVGStyles() {
+    const styleId = 'svg-section-styles';
+    if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+            /* Styles pour la section SVG */
+            .svg-content-container {
+                display: flex;
+                gap: 20px;
+                margin-bottom: 20px;
+            }
+            
+            @media (max-width: 1200px) {
+                .svg-content-container {
+                    flex-direction: column;
+                }
+            }
+            
+            .svg-container {
+                flex: 3;
+                background: white;
+                border-radius: 8px;
+                padding: 15px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                min-height: 400px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .cluster-students-container {
+                flex: 2;
+                background: white;
+                border-radius: 8px;
+                padding: 15px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                max-height: 400px;
+                overflow-y: auto;
+            }
+            
+            .cluster-students-container h4 {
+                margin-top: 0;
+                margin-bottom: 15px;
+                color: #1f2937;
+                font-size: 16px;
+                border-bottom: 2px solid #e5e7eb;
+                padding-bottom: 8px;
+            }
+            
+            .cluster-students-list {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .student-card-svg {
+                background: #f8fafc;
+                border-radius: 6px;
+                padding: 10px;
+                border-left: 4px solid #4f46e5;
+                transition: all 0.2s;
+            }
+            
+            .student-card-svg:hover {
+                background: #f1f5f9;
+                transform: translateX(4px);
+            }
+            
+            .outliers-section {
+                background: white;
+                border-radius: 8px;
+                padding: 15px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                margin-top: 20px;
+            }
+            
+            .outliers-section h4 {
+                margin-top: 0;
+                margin-bottom: 15px;
+                color: #dc2626;
+                font-size: 16px;
+            }
+            
+            .outliers-list {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            
+            .outlier-item {
+                background: #fee2e2;
+                color: #991b1b;
+                padding: 8px 12px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 500;
+                border: 1px solid #fecaca;
+            }
+            
+            /* Styles pour les points SVG */
+            .student-point, .outlier-point {
+                transition: r 0.2s, opacity 0.2s;
+            }
+            
+            .student-point:hover, .outlier-point:hover {
+                cursor: pointer;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+// Ajouter les styles au chargement
+document.addEventListener('DOMContentLoaded', addSVGStyles);
