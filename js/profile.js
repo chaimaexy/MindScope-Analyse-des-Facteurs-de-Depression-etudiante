@@ -174,7 +174,29 @@ function initializeVisualizations() {
 } catch (error) {
     console.error('Erreur dans sunburst chart:', error);
 }
-        
+
+// 5. Graphique Cluster vs Outliers (NOUVEAU)
+        try {
+            if (typeof createClusterOutliersChart === 'function') {
+                const clusterData = clusters[0] || [];
+                const clusterIdEl = document.getElementById('current-cluster-id');
+                const outliers = detectOutliers(clusterData, CONFIG.featureKeys);
+                createClusterOutliersChart(
+                    "#clust-out-container",
+                    clusterData,   
+                    outliers,      
+                    0    
+                )
+
+            }
+            else {
+                console.warn('createClustOut non disponible');
+            }
+        }
+        catch (error) {
+            console.error('Erreur dans ClustOut chart:', error);
+        }
+                
         // 5. Légende
         createClusterLegend();
         
@@ -1266,29 +1288,29 @@ function updateClusterSVGVisualization(clusterId) {
     
     const clusterData = clusters[clusterId];
     
-    // 1. Créer le graphique SVG
+  /*  // 1. Créer le graphique SVG
     if (typeof createScalableVectorGraphic === 'function') {
         createScalableVectorGraphic('#scalable-svg-container', clusterData, clusterId);
     } else {
         console.warn('createScalableVectorGraphic non disponible');
         showSVGErrorMessage('#scalable-svg-container', 'Fonction SVG non disponible');
-    }
+    }*/
     
     // 2. Afficher les étudiants du cluster
-    if (typeof displayClusterStudents === 'function') {
+    /*if (typeof displayClusterStudents === 'function') {
         displayClusterStudents('#cluster-students-list', clusterData, clusterId);
     } else {
         console.warn('displayClusterStudents non disponible');
         showSVGErrorMessage('#cluster-students-list', 'Fonction d\'affichage des étudiants non disponible');
-    }
+    }*/
     
     // 3. Afficher les outliers du cluster
-    if (typeof displayClusterOutliers === 'function') {
+   /* if (typeof displayClusterOutliers === 'function') {
         displayClusterOutliers(clusterData, '#cluster-outliers-list', CONFIG.featureKeys);
     } else {
         console.warn('displayClusterOutliers non disponible');
         showSVGErrorMessage('#cluster-outliers-list', 'Fonction d\'affichage des outliers non disponible');
-    }
+    }*/
     
     // 4. Mettre à jour le titre de la section
     updateSVGTitle(clusterId);
@@ -1615,5 +1637,7 @@ function addSVGStyles() {
     }
 }
 
+
 // Ajouter les styles au chargement
 document.addEventListener('DOMContentLoaded', addSVGStyles);
+
