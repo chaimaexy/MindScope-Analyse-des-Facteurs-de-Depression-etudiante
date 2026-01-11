@@ -16,6 +16,26 @@ function initCityTable() {
             updateCityTable();
         });
     }
+
+    CommentButton.attach({
+        container: document
+            .getElementById('city-table')
+            .closest('.chart-card'),
+        content: `
+            Ce tableau présente :
+        <ul style="margin: 6px 0 0 16px;">
+            <li>le nombre d'étudiants par ville</li>
+            <li>la satisfaction moyenne</li>
+            <li>le CGPA moyen</li>
+            <li>le taux de dépression</li>
+        </ul>
+        <br/>
+        Cliquez sur une ligne pour filtrer par ville.
+        `,
+        position: 'top-right',
+        topOffset: 108,
+        rightOffset: 1908
+    });
     
     cityTableInitialized = true;
 }

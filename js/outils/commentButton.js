@@ -1,31 +1,19 @@
 (function () {
-    function attach({ container, content }) {
+    function attach({ container, content, position = 'bottom-left', topOffset, rightOffset, bottomOffset, leftOffset }) {
         const root = d3.select(container);
         if (root.empty()) return;
 
-        // Cherche ou crée un overlay
-        let overlay = root.select('.chart-overlay');
-        if (overlay.empty()) {
-            root.style('position', 'relative');
+        // Empêche les doublons
+        if (!root.select('.comment-button').empty()) return;
 
-            overlay = root.append('div')
-                .attr('class', 'chart-overlay')
-                .style('position', 'absolute')
-                .style('inset', '0') // top/right/bottom/left = 0
-                .style('pointer-events', 'none'); // IMPORTANT
-        }
+        // Container relatif
+        root.style('position', 'relative').style('width', '100%');
 
-        // Empêcher doublons
-        if (!overlay.select('.comment-button').empty()) return;
-
-        const button = overlay.append('button')
+        const button = root.append('button')
             .attr('class', 'comment-button')
             .style('position', 'absolute')
-            .style('bottom', '28px')
-            .style('left', '8px')
             .style('z-index', '20')
-            .style('pointer-events', 'auto')
-            .style('background', '#000')
+            .style('background', '#000000ff')
             .style('color', 'white')
             .style('border', 'none')
             .style('border-radius', '4px')
@@ -34,13 +22,29 @@
             .style('font-size', '14px')
             .text('💬');
 
-        const box = overlay.append('div')
+        // Position par défaut : bas gauche
+        switch(position) {
+            case 'top-right':
+                button.style('top', (topOffset !== undefined ? topOffset : 8) + 'px')
+                      .style('right', (rightOffset !== undefined ? rightOffset : 8) + 'px');
+                break;
+            case 'top-left':
+                button.style('top', (topOffset !== undefined ? topOffset : 8) + 'px')
+                      .style('left', (leftOffset !== undefined ? leftOffset : 8) + 'px');
+                break;
+            case 'bottom-right':
+                button.style('bottom', (bottomOffset !== undefined ? bottomOffset : 8) + 'px')
+                      .style('right', (rightOffset !== undefined ? rightOffset : 8) + 'px');
+                break;
+            default: // 'bottom-left'
+                button.style('bottom', (bottomOffset !== undefined ? bottomOffset : 8) + 'px')
+                      .style('left', (leftOffset !== undefined ? leftOffset : 8) + 'px');
+        }
+
+        const box = root.append('div')
             .attr('class', 'comment-box')
             .style('position', 'absolute')
-            .style('bottom', '64px')
-            .style('left', '8px')
             .style('z-index', '20')
-            .style('pointer-events', 'auto')
             .style('background', 'white')
             .style('border', '1px solid #cbd5e1')
             .style('border-radius', '6px')
@@ -51,11 +55,19 @@
             .style('display', 'none')
             .html(content);
 
+        // Position de la box juste sous le bouton
+        if(position.startsWith('top')) {
+            box.style('top', (topOffset !== undefined ? topOffset + 28 : 36) + 'px')
+               .style('left', button.style('left') || 'auto')
+               .style('right', button.style('right') || 'auto');
+        } else { // bottom
+            box.style('bottom', (bottomOffset !== undefined ? bottomOffset + 28 : 36) + 'px')
+               .style('left', button.style('left') || 'auto')
+               .style('right', button.style('right') || 'auto');
+        }
+
         button.on('click', () => {
-            box.style(
-                'display',
-                box.style('display') === 'none' ? 'block' : 'none'
-            );
+            box.style('display', box.style('display') === 'none' ? 'block' : 'none');
         });
     }
 

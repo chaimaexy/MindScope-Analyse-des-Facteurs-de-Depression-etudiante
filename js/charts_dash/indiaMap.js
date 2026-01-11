@@ -26,6 +26,7 @@ async function initIndiaMap() {
         .attr('viewBox', `0 0 ${width} ${height}`);
     
     const mapGroup = svg.append('g').attr('class', 'map-container');
+
     
     indiaMap = {
         svg,
@@ -82,6 +83,18 @@ async function initIndiaMap() {
             .style('font-weight', '600')
             .style('text-shadow', '1px 1px 2px white')
             .text('🇮🇳 États de l\'Inde');
+
+        CommentButton.attach({
+        container: document
+            .getElementById('us-map') // ou '#india-map' si tu changes l'id
+            .closest('.chart-card'),   // container parent de la carte
+        content: `
+                <strong>🇮🇳 États de l'Inde</strong><br/><br/>
+                Cette carte montre les états indiens et leur métrique sélectionnée
+                (dépression, CGPA, satisfaction ou nombre d'étudiants).<br/><br/>
+                Les valeurs sont mises à jour dynamiquement selon les filtres appliqués.
+            `
+        });
         
         indiaMapInitialized = true;
         
@@ -699,5 +712,5 @@ function displayMapError(message) {
 // Exposer les fonctions
 window.initIndiaMap = initIndiaMap;
 window.updateIndiaMap = updateIndiaMap;
-window.initUSMap = initIndiaMap;
-window.updateUSMap = updateIndiaMap;
+//window.initUSMap = initIndiaMap;
+//window.updateUSMap = updateIndiaMap;
