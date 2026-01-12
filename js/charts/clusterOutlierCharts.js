@@ -178,7 +178,7 @@ function displayEnhancedOutliersList(containerId, outliers) {
             .style('padding', '20px')
             .style('color', '#16a34a')
             .html(`
-                <div style="font-size: 24px; margin-bottom: 10px;">✅</div>
+                <div style="font-size: 24px; margin-bottom: 10px;"><i class="icon icon-check" aria-hidden="true"></i></div>
                 <div style="font-size: 14px; font-weight: 600;">Aucun outlier détecté</div>
                 <div style="font-size: 12px;">Tous les étudiants suivent les tendances du cluster</div>
             `);
@@ -277,7 +277,7 @@ function displayEnhancedOutliersList(containerId, outliers) {
                       color: ${isDepressed ? '#991b1b' : '#166534'}; 
                       padding: 4px 8px; border-radius: 12px; 
                       font-weight: 500; font-size: 11px;">
-                    ${isDepressed ? '⚠️ Déprimé' : '✅ Sain'}
+                    ${isDepressed ? '<i class="icon icon-warning" aria-hidden="true"></i> Déprimé' : '<i class="icon icon-check" aria-hidden="true"></i> Sain'}
                 </div>
             `;
         });
@@ -290,7 +290,7 @@ function displayEnhancedOutliersList(containerId, outliers) {
                     style="background: #4f46e5; color: white; border: none; 
                            padding: 6px 12px; border-radius: 6px; font-size: 11px;
                            cursor: pointer; transition: background 0.2s;">
-                👁️ Voir
+                <i class="icon icon-eye" aria-hidden="true"></i> Voir
             </button>
         `);
     

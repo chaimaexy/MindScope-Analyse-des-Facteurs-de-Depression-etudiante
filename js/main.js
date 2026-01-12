@@ -175,70 +175,18 @@ function calculateWellnessScore(student) {
 
 // Configurer les filtres
  // Configurer les filtres
+// Configurer les filtres - VERSION AMÉLIORÉE
 function setupFilters(onFilterChange) {
     const filterState = {
         gender: 'all',
         degree: 'all',
         depression: 'all',
-        city: 'all', // AJOUTÉ ICI
+        city: 'all',
         ageRange: [18, 40],
         cgpaRange: [0, 10]
     };
     
-    // Initialiser les événements de filtre
-    document.getElementById('genderFilter').addEventListener('change', (e) => {
-        filterState.gender = e.target.value;
-        applyFilters();
-    });
-    
-    document.getElementById('degreeFilter').addEventListener('change', (e) => {
-        filterState.degree = e.target.value;
-        applyFilters();
-    });
-    
-    document.getElementById('depressionFilter').addEventListener('change', (e) => {
-        filterState.depression = e.target.value;
-        applyFilters();
-    });
-    
-    // AJOUTÉ ICI: Événement pour le filtre ville
-    document.getElementById('cityFilter').addEventListener('change', (e) => {
-        filterState.city = e.target.value;
-        applyFilters();
-    });
-    
-    // Fonction pour peupler le filtre ville
-    function populateCityFilter() {
-        const cityFilter = document.getElementById('cityFilter');
-        if (!cityFilter) return;
-        
-        // Nettoyer les options existantes (sauf "Toutes les villes")
-        cityFilter.innerHTML = '<option value="all">Toutes les villes</option>';
-        
-        // Récupérer toutes les villes uniques
-        const allCities = [...new Set(studentData.map(d => d.city))];
-        const validCities = allCities.filter(city => 
-            city && city !== 'Unknown' && city !== 'unknown' && city.trim() !== ''
-        );
-        
-        // Trier les villes par ordre alphabétique
-        validCities.sort((a, b) => a.localeCompare(b, 'fr'));
-        
-        // Ajouter chaque ville comme option
-        validCities.forEach(city => {
-            const option = document.createElement('option');
-            option.value = city;
-            option.textContent = city;
-            cityFilter.appendChild(option);
-        });
-        
-        console.log(`Filtre ville initialisé avec ${validCities.length} villes`);
-    }
-    
-    // Appeler la fonction après le chargement des données
-    setTimeout(populateCityFilter, 100);
-    
-    // Appliquer les filtres
+    // Fonction principale d'application des filtres
     function applyFilters() {
         let filtered = [...studentData];
         
@@ -266,10 +214,12 @@ function setupFilters(onFilterChange) {
             );
         }
         
-        // AJOUTÉ ICI: Filtre ville
+        // Filtre ville
         if (filterState.city !== 'all') {
             filtered = filtered.filter(d => d.city === filterState.city);
         }
+        
+        console.log(`Filtres appliqués: ${studentData.length} → ${filtered.length} étudiants`);
         
         // Appeler le callback avec les données filtrées
         if (onFilterChange) {
@@ -278,6 +228,58 @@ function setupFilters(onFilterChange) {
         
         return filtered;
     }
+    
+    // Initialiser les événements
+    document.getElementById('genderFilter').addEventListener('change', (e) => {
+        filterState.gender = e.target.value;
+        applyFilters();
+    });
+    
+    document.getElementById('degreeFilter').addEventListener('change', (e) => {
+        filterState.degree = e.target.value;
+        applyFilters();
+    });
+    
+    document.getElementById('depressionFilter').addEventListener('change', (e) => {
+        filterState.depression = e.target.value;
+        applyFilters();
+    });
+    
+    document.getElementById('cityFilter').addEventListener('change', (e) => {
+        filterState.city = e.target.value;
+        applyFilters();
+    });
+    
+    // Fonction pour peupler le filtre ville
+    function populateCityFilter() {
+        const cityFilter = document.getElementById('cityFilter');
+        if (!cityFilter) return;
+        
+        // Nettoyer les options existantes
+        cityFilter.innerHTML = '<option value="all">Toutes les villes</option>';
+        
+        // Récupérer toutes les villes uniques
+        const allCities = [...new Set(studentData.map(d => d.city))];
+        const validCities = allCities.filter(city => 
+            city && city !== 'Unknown' && city !== 'unknown' && city.trim() !== ''
+        );
+        
+        // Trier les villes par ordre alphabétique
+        validCities.sort((a, b) => a.localeCompare(b, 'fr'));
+        
+        // Ajouter chaque ville comme option
+        validCities.forEach(city => {
+            const option = document.createElement('option');
+            option.value = city;
+            option.textContent = city;
+            cityFilter.appendChild(option);
+        });
+        
+        console.log(`Filtre ville initialisé avec ${validCities.length} villes`);
+    }
+    
+    // Appeler après le chargement des données
+    setTimeout(populateCityFilter, 100);
     
     // Interface publique
     return {
@@ -290,16 +292,22 @@ function setupFilters(onFilterChange) {
             filterState.gender = 'all';
             filterState.degree = 'all';
             filterState.depression = 'all';
-            filterState.city = 'all'; // AJOUTÉ ICI
+            filterState.city = 'all';
             
             document.getElementById('genderFilter').value = 'all';
             document.getElementById('degreeFilter').value = 'all';
             document.getElementById('depressionFilter').value = 'all';
-            document.getElementById('cityFilter').value = 'all'; // AJOUTÉ ICI
+            document.getElementById('cityFilter').value = 'all';
             
             return applyFilters();
         },
-        getCurrentFilters: () => ({ ...filterState }) // Pour déboguer
+        getCurrentFilters: () => ({ ...filterState }),
+        // Fonction pour forcer la mise à jour (utile après modification des données)
+        forceUpdate: () => {
+            const filtered = applyFilters();
+            if (onFilterChange) onFilterChange(filtered);
+            return filtered;
+        }
     };
 }
 // Obtenir les données
@@ -400,7 +408,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 if (loadingOverlay) {
                     loadingOverlay.innerHTML = `
                         <div style="text-align: center;">
-                            <div style="color: #f59e0b; font-size: 48px; margin-bottom: 20px;">⚠️</div>
+                            <div style="color: #f59e0b; font-size: 48px; margin-bottom: 20px;"><i class="icon icon-warning" aria-hidden="true"></i></div>
                             <h3 style="color: #1e293b; margin-bottom: 10px;">Attention</h3>
                             <p style="color: #64748b;">Les données sont chargées mais l\'interface n\'est pas initialisée.</p>
                             <button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">
@@ -420,7 +428,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (loadingOverlay) {
             loadingOverlay.innerHTML = `
                 <div style="text-align: center;">
-                    <div style="color: #ef4444; font-size: 48px; margin-bottom: 20px;">❌</div>
+                    <div style="color: #ef4444; font-size: 48px; margin-bottom: 20px;"><i class="icon icon-close" aria-hidden="true"></i></div>
                     <h3 style="color: #1e293b; margin-bottom: 10px;">Erreur de chargement</h3>
                     <p style="color: #64748b; margin-bottom: 10px;">${error.message || 'Erreur inconnue'}</p>
                     <p style="color: #94a3b8; font-size: 12px; margin-bottom: 20px;">Vérifiez la console pour plus de détails</p>

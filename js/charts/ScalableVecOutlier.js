@@ -226,13 +226,13 @@ export function createScalableVectorGraphic(containerSelector, clusterData, clus
             .style('opacity', 1)
             .html(`
                 <div style="margin-bottom: 8px; font-weight: bold; color: ${isOutlier ? '#dc2626' : '#1f2937'}">
-                    ${isOutlier ? '⚠️ OUTLIER - ' : ''}Étudiant #${student.id}
+                    ${isOutlier ? '<i class="icon icon-warning" aria-hidden="true"></i> OUTLIER - ' : ''}Étudiant #${student.id}
                 </div>
                 <div style="font-size: 12px; color: #4b5563; margin-bottom: 5px;">
                     Âge: ${student.age} ans | CGPA: ${student.cgpa?.toFixed(2) || 'N/A'}/10
                 </div>
                 <div style="font-size: 12px; color: ${student.depression === 1 ? '#dc2626' : '#16a34a'}; margin-bottom: 5px;">
-                    ${student.depression === 1 ? '⚠️ Dépression détectée' : '✅ Pas de dépression'}
+                    ${student.depression === 1 ? '<i class="icon icon-warning" aria-hidden="true"></i> Dépression détectée' : '<i class="icon icon-check" aria-hidden="true"></i> Pas de dépression'}
                 </div>
                 <div style="font-size: 12px; color: #6b7280;">
                     Niveau de risque: <span style="font-weight: bold; color: ${riskScore > 60 ? '#dc2626' : riskScore > 30 ? '#f59e0b' : '#16a34a'}">
@@ -246,7 +246,7 @@ export function createScalableVectorGraphic(containerSelector, clusterData, clus
         d3.select('#svg-tooltip').style('opacity', 0);
     }
     
-    console.log('✅ SVG créé pour le cluster', clusterIndex);
+    console.log('SVG créé pour le cluster', clusterIndex);
 }
 
 /**
@@ -545,7 +545,7 @@ export function displayClusterStudents(containerSelector, clusterData, clusterIn
                 .style('color', '#dc2626')
                 .style('margin-top', '8px')
                 .style('font-weight', 'bold')
-                .html('⚠️ Étudiant atypique');
+                .html('<i class="icon icon-warning" aria-hidden="true"></i> Étudiant atypique');
         }
     });
 }
@@ -588,7 +588,7 @@ export function displayClusterOutliers(clusterData, containerSelector, featureKe
             .style('color', '#991b1b')
             .html(`
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <strong style="font-size: 14px;">⚠️ Outlier - Étudiant #${outlier.id}</strong>
+                    <strong style="font-size: 14px;"><i class="icon icon-warning" aria-hidden="true"></i> Outlier - Étudiant #${outlier.id}</strong>
                     <span style="background: ${riskScore > 60 ? '#dc2626' : riskScore > 30 ? '#f59e0b' : '#16a34a'}; 
                          color: white; padding: 3px 10px; border-radius: 12px; font-size: 11px;">
                         ${riskLevel}
@@ -598,7 +598,7 @@ export function displayClusterOutliers(clusterData, containerSelector, featureKe
                     Âge: ${outlier.age} ans | CGPA: ${outlier.cgpa?.toFixed(2) || 'N/A'}/10
                 </div>
                 <div style="font-size: 12px;">
-                    ${outlier.depression === 1 ? '⚠️ Dépression détectée' : '✅ Pas de dépression'}
+                    ${outlier.depression === 1 ? '<i class="icon icon-warning" aria-hidden="true"></i> Dépression détectée' : '<i class="icon icon-check" aria-hidden="true"></i> Pas de dépression'}
                 </div>
             `);
     });

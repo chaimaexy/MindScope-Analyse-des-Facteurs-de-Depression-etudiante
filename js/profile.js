@@ -36,6 +36,7 @@ const CONFIG = {
 };
 
 // Initialisation principale
+// Initialisation principale - VERSION FINALE
 async function initProfiling() {
     showLoading(true);
     
@@ -58,11 +59,19 @@ async function initProfiling() {
         // 6. Initialiser les événements
         initializeEventListeners();
         
-        // 7. Initialiser les filtres
-        const filterManager = setupFilters(handleFilterChange);
+        // 7. Initialiser les filtres avec la fonction de callback
+        const filterManager = setupFilters((filteredData) => {
+            console.log('Callback des filtres appelé avec', filteredData.length, 'données');
+            handleFilterChange(filteredData);
+        });
         
         // 8. Sélectionner un cluster par défaut
         selectCluster(0);
+        
+        // 9. Initialiser la table des couleurs
+        initializeColorTable();
+        
+        console.log('Profiling initialisé avec succès');
         
     } catch (error) {
         console.error("Erreur lors de l'initialisation:", error);
@@ -117,9 +126,27 @@ function updateKPIs() {
 
 // Initialiser les visualisations
 function initializeVisualizations() {
+    
+    
     try {
         console.log('Initialisation des visualisations...');
         
+        try {
+            initializeExplanationButton();
+        } catch (error) {
+            console.error('Erreur dans le bouton d\'explication:', error);
+        }
+        try {
+    initializeRadarExplanationButton();
+} catch (error) {
+    console.error('Erreur dans le bouton d\'explication radar:', error);
+}
+         try {
+            initializeColorTable();
+            setupClusterClickInTable();
+        } catch (error) {
+            console.error('Erreur dans la table des couleurs:', error);
+        }
         // 1. Scatter plot
         try {
             if (typeof createScatterPlot === 'function') {
@@ -175,27 +202,8 @@ function initializeVisualizations() {
     console.error('Erreur dans sunburst chart:', error);
 }
 
-// 5. Graphique Cluster vs Outliers (NOUVEAU)
-        try {
-            if (typeof createClusterOutliersChart === 'function') {
-                const clusterData = clusters[0] || [];
-                const clusterIdEl = document.getElementById('current-cluster-id');
-                const outliers = detectOutliers(clusterData, CONFIG.featureKeys);
-                createClusterOutliersChart(
-                    "#clust-out-container",
-                    clusterData,   
-                    outliers,      
-                    0    
-                )
 
-            }
-            else {
-                console.warn('createClustOut non disponible');
-            }
-        }
-        catch (error) {
-            console.error('Erreur dans ClustOut chart:', error);
-        }
+       
                 
         // 5. Légende
         createClusterLegend();
@@ -276,7 +284,7 @@ function populateStudentSelector() {
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                 <span class="student-name" style="font-weight: 600;">Étudiant #${d.id}</span>
                 <span class="student-depression-badge ${d.depression === 1 ? 'depressed' : 'healthy'}">
-                    ${d.depression === 1 ? '⚠️' : '✅'}
+                    ${d.depression === 1 ? '<i class="icon icon-warning" aria-hidden="true"></i>' : '<i class="icon icon-check" aria-hidden="true"></i>'}
                 </span>
             </div>
         `);
@@ -285,7 +293,7 @@ function populateStudentSelector() {
     cards.append('div')
         .attr('class', 'student-info')
         .html(d => `
-            <div style="font-size: 11px; color: #64748b;">
+            <div style="font-size: 11px;">
                 <div>Âge: ${d.age} ans</div>
                 <div>CGPA: ${d.cgpa?.toFixed(2) || 'N/A'}/10</div>
                 <div>Cluster: <span style="color: #4f46e5; font-weight: 500;">${d.cluster_id + 1}</span></div>
@@ -416,7 +424,7 @@ function updateDisplayForStudent(student) {
     updateBubbleChart();
     
     
-    console.log('✅ Affichage mis à jour pour l\'étudiant #' + student.id);
+    console.log('Affichage mis à jour pour l\'étudiant #' + student.id);
 }
 
 // 5. Afficher le résumé de l'étudiant
@@ -463,10 +471,10 @@ function showStudentSummary(student, clusterData) {
     summaryContainer.innerHTML = `
         <div class="student-detail-card">
             <div class="detail-header">
-                <h4>📋 Étudiant #${student.id}</h4>
+                <h4><i class="icon icon-doc" aria-hidden="true"></i> Étudiant #${student.id}</h4>
                 <div class="detail-status">
                     <span class="depression-status ${student.depression === 1 ? 'depressed' : 'healthy'}">
-                        ${student.depression === 1 ? '⚠️ Déprimé' : '✅ Sain'}
+                        ${student.depression === 1 ? '<i class="icon icon-warning" aria-hidden="true"></i> Déprimé' : '<i class="icon icon-check" aria-hidden="true"></i> Sain'}
                     </span>
                     <span class="risk-badge" style="background: ${riskLevel.color}">
                         ${riskLevel.label} (${riskScore}%)
@@ -491,7 +499,7 @@ function showStudentSummary(student, clusterData) {
             
             ${comparisons.length > 0 ? `
             <div class="comparisons">
-                <div class="comparison-title">📈 Comparaison avec son cluster:</div>
+                <div class="comparison-title"><i class="icon icon-trend" aria-hidden="true"></i> Comparaison avec son cluster:</div>
                 <div class="comparison-items">
                     ${comparisons.slice(0, 3).map(comp => `
                         <div class="comparison-item">
@@ -510,7 +518,7 @@ function showStudentSummary(student, clusterData) {
 
 // 6. Mettre à jour le radar pour un étudiant
 function updateRadarForStudent(student) {
-    console.log('🔄 Mise à jour du radar pour étudiant #' + student.id);
+    console.log('Mise à jour du radar pour étudiant #' + student.id);
     
     // Vérifier si le radar est initialisé
     if (!radarChartInstance) {
@@ -537,7 +545,7 @@ function updateRadarForStudent(student) {
         `Étudiant #${student.id} vs Cluster ${student.cluster_id + 1}` // Titre
     );
     
-    console.log('✅ Radar mis à jour');
+    console.log('Radar mis à jour');
 }
 
 
@@ -661,19 +669,13 @@ function selectCluster(clusterIndex) {
     updateBubbleChart();
     
     // Mettre à jour les outliers
-     updateOutliers();
+     //updateOutliers();
     
     // Mettre à jour le badge de risque
     updateRiskBadge(clusterData);
 }
 
-function updateOutliers() {
-    if (currentSelection.cluster !== null) {
-        const clusterData = processedData.filter(d => d.cluster_id === currentSelection.cluster);
-        const outliers = detectOutliers(clusterData, CONFIG.featureKeys);
-        displayOutliers('#outliers-list', outliers);
-    }
-}
+
 
 // Mettre à jour les statistiques du cluster
 // Mettre à jour les statistiques du cluster - VERSION ULTIME
@@ -844,7 +846,7 @@ function updateRadarForCluster(clusterData) {
 
 // Mettre à jour le radar chart pour un étudiant
 function updateRadarForStudent(student) {
-    console.log('🔄 Mise à jour du radar pour étudiant', student);
+    console.log('Mise à jour du radar pour étudiant', student);
     
     // Vérifier les données de l'étudiant
     console.log('Données étudiant disponibles:', {
@@ -1044,22 +1046,109 @@ function calculateCorrelation(x, y) {
 }
 
 // Gérer les changements de filtres
+// Gérer les changements de filtres - VERSION COMPLÈTE
 function handleFilterChange(filteredData) {
-    // Réappliquer le clustering sur les données filtrées
-    clusters = performClustering(filteredData, CONFIG.numClusters);
+    console.log('Filtres appliqués, données filtrées:', filteredData.length);
     
-    // Mettre à jour toutes les visualisations
-    updateScatterPlot('#cluster-map', filteredData, clusters, currentSelection.projection);
+    if (!filteredData || filteredData.length === 0) {
+        console.warn('Aucune donnée après filtrage');
+        // Vous pouvez afficher un message ou réinitialiser
+        return;
+    }
+    
+    // 1. Réappliquer le clustering sur les données filtrées
+    try {
+        clusters = performClustering(filteredData, CONFIG.numClusters);
+        console.log('Clusters recalculés:', clusters.length);
+    } catch (error) {
+        console.error('Erreur lors du clustering:', error);
+        // Si le clustering échoue, utiliser les clusters existants avec filtres
+        clusters = clusters.map(cluster => 
+            cluster.filter(student => 
+                filteredData.some(f => f.id === student.id)
+            )
+        ).filter(cluster => cluster.length > 0);
+    }
+    
+    // 2. Mettre à jour les données traitées avec les données filtrées
+    processedData = filteredData;
+    
+    // 3. Mettre à jour toutes les visualisations
+    
+    // A. Scatter plot
+    if (typeof updateScatterPlot === 'function' && scatterPlot) {
+        updateScatterPlot('#cluster-map', filteredData, clusters, currentSelection.projection, currentColorScheme);
+    } else if (typeof createScatterPlot === 'function') {
+        createScatterPlot(
+            '#cluster-map',
+            filteredData,
+            clusters,
+            CLUSTER_COLORS,
+            currentSelection.projection
+        );
+    }
+    
+    // B. KPIs
     updateKPIs();
+    
+    // C. Légende
     createClusterLegend();
+    
+    // D. Table des couleurs
+    createColorTable();
+    
+    // E. Sélecteur d'étudiants
     populateStudentSelector();
     
-    // Réinitialiser la sélection
-    if (currentSelection.cluster !== null && currentSelection.cluster < clusters.length) {
-        selectCluster(currentSelection.cluster);
+    // F. Radar chart
+    if (currentSelection.student) {
+        // Si un étudiant est sélectionné, vérifier s'il est toujours dans les données filtrées
+        const selectedStudent = filteredData.find(d => d.id === currentSelection.student.id);
+        if (selectedStudent) {
+            currentSelection.student = selectedStudent;
+            updateRadarForStudent(selectedStudent);
+        } else {
+            // Sinon, sélectionner le cluster
+            currentSelection.student = null;
+            if (currentSelection.cluster !== null && clusters[currentSelection.cluster]) {
+                const clusterData = clusters[currentSelection.cluster] || [];
+                updateRadarForCluster(clusterData);
+            } else {
+                selectCluster(0);
+            }
+        }
+    } else if (currentSelection.cluster !== null) {
+        // Si un cluster est sélectionné
+        if (clusters[currentSelection.cluster] && clusters[currentSelection.cluster].length > 0) {
+            const clusterData = clusters[currentSelection.cluster];
+            updateRadarForCluster(clusterData);
+            updateClusterStats(clusterData);
+            updateClusterHeatmap(clusterData);
+            updateRiskBadge(clusterData);
+        } else {
+            selectCluster(0);
+        }
     } else {
+        // Par défaut, sélectionner le premier cluster
         selectCluster(0);
     }
+    
+    // G. Sunburst chart
+    try {
+        if (typeof createSunburstChart === 'function') {
+            createSunburstChart('#bubble-chart-container', filteredData, clusters);
+        }
+    } catch (error) {
+        console.error('Erreur dans la mise à jour du sunburst:', error);
+    }
+    
+    // H. Heatmap (si un cluster est sélectionné)
+    if (currentSelection.cluster !== null && clusters[currentSelection.cluster]) {
+        const clusterData = clusters[currentSelection.cluster];
+        updateClusterHeatmap(clusterData);
+    }
+    
+    console.log('Toutes les visualisations mises à jour avec les filtres');
 }
 
 // Initialiser les événements
@@ -1106,7 +1195,7 @@ function initializeEventListeners() {
     
     // Métrique d'outliers
     d3.select('#outlier-metric').on('change', function() {
-        updateOutliers();
+        //updateOutliers();
     });
     
     // Voir les recommandations
@@ -1272,7 +1361,7 @@ function initializeSVGVisualization() {
         }, 1000);
     }
     
-    console.log('✅ Visualisation SVG initialisée');
+    console.log('Visualisation SVG initialisée');
 }
 
 /**
@@ -1415,7 +1504,7 @@ function exportSVG() {
         
         URL.revokeObjectURL(url);
         
-        console.log('✅ SVG exporté avec succès');
+        console.log('SVG exporté avec succès');
     } catch (error) {
         console.error('Erreur lors de l\'export SVG:', error);
         alert('Erreur lors de l\'export du SVG');
@@ -1440,7 +1529,7 @@ function toggleSVGView() {
     // Mettre à jour le bouton
     const toggleButton = document.getElementById('toggle-view');
     if (toggleButton) {
-        toggleButton.textContent = currentSVGView === 'scatter' ? '🔄 Vue Radiale' : '🔄 Vue Scatter';
+        toggleButton.innerHTML = currentSVGView === 'scatter' ? '<i class="icon icon-refresh" aria-hidden="true"></i> Vue Radiale' : '<i class="icon icon-refresh" aria-hidden="true"></i> Vue Scatter';
     }
     
     // Re-créer le SVG avec la nouvelle vue si un cluster est sélectionné
@@ -1466,7 +1555,7 @@ function showSVGErrorMessage(containerSelector, message) {
         .style('text-align', 'center')
         .style('padding', '20px')
         .html(`
-            <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
+            <div style="font-size: 48px; margin-bottom: 20px;"><i class="icon icon-warning" aria-hidden="true"></i></div>
             <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">Fonctionnalité temporairement indisponible</div>
             <div style="font-size: 14px;">${message}</div>
         `);
@@ -1482,7 +1571,7 @@ function updateSVGTitle(clusterId) {
         const depressedCount = clusters[clusterId] ? clusters[clusterId].filter(d => d.depression === 1).length : 0;
         const depressionRate = studentCount > 0 ? (depressedCount / studentCount * 100).toFixed(1) : 0;
         
-        titleElement.textContent = `🎨 Cluster ${clusterId + 1} - ${studentCount} étudiants (${depressionRate}% déprimés)`;
+        titleElement.innerHTML = `<i class="icon icon-palette" aria-hidden="true"></i> Cluster ${clusterId + 1} - ${studentCount} étudiants (${depressionRate}% déprimés)`;
     }
 }
 
@@ -1641,3 +1730,752 @@ function addSVGStyles() {
 // Ajouter les styles au chargement
 document.addEventListener('DOMContentLoaded', addSVGStyles);
 
+// Fonction pour initialiser le bouton d'explication
+// Fonction pour initialiser le bouton d'explication
+function initializeExplanationButton() {
+    const explanationContent = `
+        <div style="color: #1f2937; line-height: 1.5;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <div style="background: #4f46e5; color: white; padding: 8px 10px; border-radius: 6px; font-size: 20px;">
+                    <i class="icon icon-target" aria-hidden="true"></i>
+                </div>
+                <div>
+                    <h4 style="margin: 0; font-size: 16px; color: #1f2937; font-weight: 600;">
+                        Explorer la Carte des Clusters
+                    </h4>
+                    <p style="margin: 4px 0 0 0; font-size: 12px; color: #6b7280;">
+                        Découvrez les profils cachés de vos étudiants
+                    </p>
+                </div>
+            </div>
+            
+            <div style="background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #4f46e5;">
+                <p style="margin: 0; font-size: 13px;">
+                    <strong><i class="icon icon-sparkle" aria-hidden="true"></i> Visualisez l'invisible :</strong> Cette carte révèle les groupes naturels d'étudiants 
+                    partageant des caractéristiques similaires de santé mentale et académique.
+                </p>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <h5 style="margin: 0 0 8px 0; font-size: 14px; color: #374151;">
+                    <i class="icon icon-palette" aria-hidden="true"></i> Comment lire cette carte :
+                </h5>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; align-items: start; gap: 8px;">
+                        <span style="background: #dc2626; color: white; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 10px; flex-shrink: 0;">●</span>
+                        <span style="font-size: 12px;"><strong>Points rouges</strong> : Étudiants à risque élevé de dépression</span>
+                    </div>
+                    <div style="display: flex; align-items: start; gap: 8px;">
+                        <span style="background: #6366f1; color: white; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 10px; flex-shrink: 0;">●</span>
+                        <span style="font-size: 12px;"><strong>Points bleus</strong> : Étudiants en bonne santé mentale</span>
+                    </div>
+                    <div style="display: flex; align-items: start; gap: 8px;">
+                        <span style="border: 2px solid #10b981; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 10px; flex-shrink: 0;"><i class="icon icon-search" aria-hidden="true" style="font-size:10px;"></i></span>
+                        <span style="font-size: 12px;"><strong>Distance entre points</strong> = Similarité entre profils étudiants</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <h5 style="margin: 0 0 8px 0; font-size: 14px; color: #374151;">
+                    <i class="icon icon-wrench" aria-hidden="true"></i> Vos super-pouvoirs :
+                </h5>
+                <ul style="margin: 0; padding-left: 20px; font-size: 12px;">
+                    <li><strong>Cliquez sur un étudiant</strong> : Zoom sur son profil détaillé</li>
+                    <li><strong>Survolez un point</strong> : Agrandissement instantané</li>
+                    <li><strong>Changez la projection</strong> : PCA, t-SNE ou UMAP</li>
+                    <li><strong>Personnalisez les couleurs</strong> : Par cluster, risque, ou caractéristique</li>
+                </ul>
+            </div>
+            
+            <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); padding: 12px; border-radius: 8px; border: 1px solid #bae6fd;">
+                <div style="display: flex; align-items: start; gap: 8px;">
+                    <div style="background: #0ea5e9; color: white; padding: 6px; border-radius: 6px; font-size: 14px;">
+                        <i class="icon icon-light" aria-hidden="true"></i>
+                    </div>
+                    <div>
+                        <p style="margin: 0; font-size: 12px; color: #0369a1; font-weight: 500;">
+                            <strong>Astuce Pro :</strong> Utilisez t-SNE pour mieux voir les clusters distincts, 
+                            et UMAP pour conserver la structure globale des données.
+                        </p>
+                        <p style="margin: 6px 0 0 0; font-size: 11px; color: #0c4a6e;">
+                            Les groupes éloignés ont des profils très différents !
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; font-size: 11px; color: #9ca3af;">
+                <span><i class="icon icon-graduation" aria-hidden="true"></i> 27,898 étudiants analysés</span>
+                <span><i class="icon icon-refresh" aria-hidden="true"></i> Mise à jour en temps réel</span>
+            </div>
+        </div>
+    `;
+    
+    const container = document.querySelector('#cluster-explanation-btn');
+    if (!container) return;
+
+    // NETTOYAGE : On vide le conteneur avant d'ajouter quoi que ce soit
+    container.innerHTML = ''; 
+
+    // Création du bouton avec effet hover
+    const button = document.createElement('button');
+    button.className = 'comment-button';
+    button.innerHTML = '💬';
+    button.title = 'Guide d\'utilisation - Cliquez pour ouvrir';
+    
+    // Création de la boîte d'explication
+    const box = document.createElement('div');
+    box.className = 'comment-box';
+    box.innerHTML = explanationContent;
+    box.style.display = 'none';
+
+    // Ajout des éléments
+    container.appendChild(button);
+    container.appendChild(box);
+
+    // Gestion du clic sur le bouton
+    button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isVisible = box.style.display === 'block';
+        box.style.display = isVisible ? 'none' : 'block';
+        
+        // Animation d'apparition
+        if (box.style.display === 'block') {
+            box.style.opacity = '0';
+            box.style.transform = 'translateY(-10px)';
+            setTimeout(() => {
+                box.style.transition = 'opacity 0.3s, transform 0.3s';
+                box.style.opacity = '1';
+                box.style.transform = 'translateY(0)';
+            }, 10);
+        }
+    });
+
+    // Fermer en cliquant ailleurs
+    document.addEventListener('click', (e) => {
+        if (!container.contains(e.target)) {
+            box.style.display = 'none';
+        }
+    });
+
+    // Fermer avec la touche Échap
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && box.style.display === 'block') {
+            box.style.display = 'none';
+        }
+    });
+
+    console.log('Bouton d\'explication créé avec une interface attirante');
+}
+
+// Fonction pour créer la table des couleurs
+// Fonction pour créer la table des couleurs avec les vraies couleurs des clusters
+function createColorTable() {
+    const container = document.getElementById('color-table-container');
+    if (!container) {
+        console.warn('Conteneur de table des couleurs non trouvé');
+        return;
+    }
+    
+    // Vider le conteneur
+    container.innerHTML = '';
+    
+    // S'assurer que CLUSTER_COLORS est disponible
+    if (typeof window.CLUSTER_COLORS === 'undefined') {
+        console.warn('CLUSTER_COLORS non défini, utilisation des couleurs par défaut');
+        window.CLUSTER_COLORS = [
+            '#4E79A7', '#F28E2C', '#E15759', '#76B7B2', 
+            '#59A14F', '#EDC949', '#AF7AA1', '#FF9DA7'
+        ];
+    }
+    
+    // Obtenir le nombre réel de clusters
+    const actualClusters = clusters.length;
+    console.log(`Création table couleurs avec ${actualClusters} clusters`);
+    console.log('Couleurs disponibles:', window.CLUSTER_COLORS);
+    
+    // Calculer les statistiques de chaque cluster pour les descriptions
+    const clusterStats = clusters.map((cluster, index) => {
+        if (!cluster || cluster.length === 0) {
+            return { size: 0, depressionRate: 0, avgAge: 0, avgCGPA: 0 };
+        }
+        
+        const depressedCount = cluster.filter(d => d.depression === 1).length;
+        const depressionRate = (depressedCount / cluster.length * 100).toFixed(1);
+        const avgAge = d3.mean(cluster, d => d.age) || 0;
+        const avgCGPA = d3.mean(cluster, d => d.cgpa) || 0;
+        
+        return {
+            size: cluster.length,
+            depressionRate: depressionRate,
+            avgAge: avgAge.toFixed(1),
+            avgCGPA: avgCGPA.toFixed(2)
+        };
+    });
+    
+    // Définir les différents schémas de couleur
+    const colorSchemes = [
+        {
+            id: 'cluster',
+            title: 'Par Cluster',
+            icon: '<i class="icon icon-palette" aria-hidden="true"></i>',
+            description: 'Groupes d\'étudiants similaires identifiés par K-means',
+            colors: Array.from({ length: actualClusters }, (_, i) => {
+                const stats = clusterStats[i] || { size: 0, depressionRate: 0 };
+                const color = window.CLUSTER_COLORS[i] || window.CLUSTER_COLORS[i % window.CLUSTER_COLORS.length];
+                
+                // Description dynamique basée sur les stats
+                let description = `${stats.size} étudiants`;
+                if (stats.depressionRate > 0) {
+                    description += `, ${stats.depressionRate}% déprimés`;
+                }
+                
+                return {
+                    label: `Cluster ${i + 1}`,
+                    color: color,
+                    description: '',
+                    clusterIndex: i
+                };
+            })
+        },
+        {
+            id: 'depression',
+            title: 'Par Dépression',
+            icon: '<i class="icon icon-sad" aria-hidden="true"></i>',
+            description: 'Statut dépressif des étudiants',
+            colors: [
+                { 
+                    label: 'Déprimé', 
+                    color: '#E15759', // Rouge du cluster 3
+                    description: 'Risque élevé de dépression' 
+                },
+                { 
+                    label: 'Non déprimé', 
+                    color: '#16a34a', // Vert du cluster 4
+                    description: 'Santé mentale normale' 
+                }
+            ]
+        },
+        {
+            id: 'suicidal',
+            title: 'Par Pensées Suicidaires',
+            icon: '<i class="icon icon-warning" aria-hidden="true"></i>',
+            description: 'Niveau de risque suicidaire',
+            colors: [
+                { 
+                    label: 'Risque élevé', 
+                    color: '#E15759', // Rouge
+                    description: 'Pensées suicidaires présentes' 
+                },
+                { 
+                    label: 'Risque moyen', 
+                    color: '#F28E2C', // Orange
+                    description: 'Facteurs de risque modérés' 
+                },
+                { 
+                    label: 'Faible risque', 
+                    color: '#59A14F', // Vert
+                    description: 'Aucune pensée suicidaire' 
+                }
+            ]
+        },
+        {
+            id: 'academic',
+            title: 'Par Pression Académique',
+            icon: '<i class="icon icon-book" aria-hidden="true"></i>',
+            description: 'Niveau de stress académique (échelle 1-5)',
+            colors: [
+                { 
+                    label: 'Très faible (1)', 
+                    // Gradient rouge-bleu - BLEU FONCÉ pour faible pression
+                    color: '#1e3a8a', // Bleu foncé
+                    description: 'Pression minimale' 
+                },
+                { 
+                    label: 'Faible (2)', 
+                    color: '#3b82f6', // Bleu
+                    description: 'Pression légère' 
+                },
+                { 
+                    label: 'Moyenne (3)', 
+                    color: '#93c5fd', // Bleu clair (milieu du gradient)
+                    description: 'Pression modérée' 
+                },
+                { 
+                    label: 'Élevée (4)', 
+                    color: '#fca5a5', // Rouge clair
+                    description: 'Pression importante' 
+                },
+                { 
+                    label: 'Très élevée (5)', 
+                    // Gradient rouge-bleu - ROUGE pour forte pression
+                    color: '#dc2626', // Rouge foncé
+                    description: 'Pression extrême' 
+                }
+            ]
+        }
+    ];
+    
+    // Créer une carte pour chaque schéma de couleur
+    colorSchemes.forEach(scheme => {
+        const card = document.createElement('div');
+        card.className = 'color-scheme-card';
+        card.dataset.scheme = scheme.id;
+        
+        // Marquer comme actif si c'est le schéma courant
+        const colorSchemeSelect = document.getElementById('color-scheme');
+        const currentScheme = colorSchemeSelect ? colorSchemeSelect.value : 'cluster';
+        const isActive = scheme.id === currentScheme;
+        
+        if (isActive) {
+            card.classList.add('active');
+        }
+        
+        card.innerHTML = `
+            <div class="color-scheme-header">
+                <div class="color-scheme-icon">${scheme.icon}</div>
+                <div class="color-scheme-title">${scheme.title}</div>
+                <div class="color-scheme-status ${isActive ? 'active' : ''}">
+                    ${isActive ? '● Actif' : '○ Inactif'}
+                </div>
+            </div>
+            <div class="color-scheme-description">
+                ${scheme.description}
+            </div>
+            <div class="color-items">
+                ${scheme.colors.map(item => `
+                    <div class="color-item" ${item.clusterIndex !== undefined ? `data-cluster="${item.clusterIndex}"` : ''}>
+                        <div class="color-sample" style="background-color: ${item.color};"></div>
+                        <div class="color-label">${item.label}</div>
+                        <div class="color-value">${item.description}</div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        
+        // Ajouter un événement de clic pour changer de schéma
+        card.addEventListener('click', () => {
+            if (colorSchemeSelect) {
+                colorSchemeSelect.value = scheme.id;
+                // Déclencher l'événement de changement
+                const changeEvent = new Event('change');
+                colorSchemeSelect.dispatchEvent(changeEvent);
+                
+                // Mettre à jour les cartes actives
+                updateActiveColorCard(scheme.id);
+            }
+        });
+        
+        container.appendChild(card);
+    });
+    
+    // Ajouter la fonctionnalité de toggle
+    setupColorTableToggle();
+    
+    console.log(`Table des couleurs créée avec ${actualClusters} clusters`);
+}
+
+// Fonction pour mettre à jour la carte active
+function updateActiveColorCard(activeSchemeId) {
+    document.querySelectorAll('.color-scheme-card').forEach(card => {
+        const schemeId = card.dataset.scheme;
+        const isActive = schemeId === activeSchemeId;
+        
+        card.classList.toggle('active', isActive);
+        
+        const statusElement = card.querySelector('.color-scheme-status');
+        if (statusElement) {
+            statusElement.textContent = isActive ? '● Actif' : '○ Inactif';
+            statusElement.classList.toggle('active', isActive);
+        }
+    });
+}
+
+// Fonction pour configurer le toggle de la table
+function setupColorTableToggle() {
+    const toggleButton = document.querySelector('.toggle-color-table');
+    const tableContainer = document.querySelector('.color-table-container');
+    
+    if (toggleButton && tableContainer) {
+        // Vérifier l'état initial
+        const isCollapsed = tableContainer.classList.contains('collapsed');
+        toggleButton.textContent = isCollapsed ? '▶' : '▼';
+        
+        toggleButton.addEventListener('click', () => {
+            const isCollapsed = tableContainer.classList.contains('collapsed');
+            
+            if (isCollapsed) {
+                // Déplier
+                tableContainer.classList.remove('collapsed');
+                tableContainer.classList.add('expanded');
+                toggleButton.textContent = '▼';
+            } else {
+                // Replier
+                tableContainer.classList.add('collapsed');
+                tableContainer.classList.remove('expanded');
+                toggleButton.textContent = '▶';
+            }
+        });
+    }
+}
+
+// Fonction pour initialiser la table des couleurs
+function initializeColorTable() {
+    try {
+        createColorTable();
+        
+        // Écouter les changements de schéma de couleur
+        const colorSchemeSelect = document.getElementById('color-scheme');
+        if (colorSchemeSelect) {
+            colorSchemeSelect.addEventListener('change', function() {
+                // Mettre à jour visuellement quelle carte est active
+                updateActiveColorCard(this.value);
+            });
+        }
+    } catch (error) {
+        console.error('Erreur lors de la création de la table des couleurs:', error);
+    }
+}
+
+function setupClusterClickInTable() {
+    document.addEventListener('click', function(e) {
+        const colorItem = e.target.closest('.color-item[data-cluster]');
+        if (colorItem) {
+            const clusterIndex = parseInt(colorItem.dataset.cluster);
+            if (!isNaN(clusterIndex)) {
+                // Sélectionner le cluster
+                selectCluster(clusterIndex);
+                
+                // Mettre en surbrillance l'élément
+                document.querySelectorAll('.color-item[data-cluster]').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                colorItem.classList.add('selected');
+                
+                // Fermer la table si elle est ouverte
+                const tableContainer = document.querySelector('.color-table-container');
+                const toggleButton = document.querySelector('.toggle-color-table');
+                if (tableContainer && !tableContainer.classList.contains('collapsed')) {
+                    tableContainer.classList.add('collapsed');
+                    tableContainer.classList.remove('expanded');
+                    if (toggleButton) {
+                        toggleButton.textContent = '▶';
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Fonction pour initialiser le bouton d'explication du radar
+function initializeRadarExplanationButton() {
+    const explanationContent = `
+        <div style="color: #1f2937; line-height: 1.5; max-width: 350px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <div style="background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%); color: white; padding: 8px 10px; border-radius: 6px; font-size: 20px;">
+                    <i> 💬</i>
+                </div>
+                <div>
+                    <h4 style="margin: 0; font-size: 16px; color: #1f2937; font-weight: 600;">
+                        Guide du Radar Comparatif
+                    </h4>
+                    <p style="margin: 4px 0 0 0; font-size: 12px; color: #6b7280;">
+                        Analysez les profils sous tous les angles
+                    </p>
+                </div>
+            </div>
+            
+            <div style="background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #8b5cf6;">
+                <p style="margin: 0; font-size: 13px;">
+                    <strong><i class="icon icon-target" aria-hidden="true"></i> Comparez visuellement :</strong> Ce radar vous permet de superposer deux profils 
+                    (étudiant vs cluster ou cluster vs global) pour identifier immédiatement 
+                    les forces et faiblesses.
+                </p>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <h5 style="margin: 0 0 8px 0; font-size: 14px; color: #374151;">
+                    <i class="icon icon-palette" aria-hidden="true"></i> Comment lire ce radar :
+                </h5>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 12px; height: 12px; background: #4f46e5; border-radius: 50%; flex-shrink: 0;"></div>
+                        <span style="font-size: 12px;"><strong>Ligne bleue continue</strong> : Profil principal</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 12px; height: 12px; background: #f59e0b; border-radius: 50%; border: 2px solid #f59e0b; flex-shrink: 0;"></div>
+                        <span style="font-size: 12px;"><strong>Ligne orange pointillée</strong> : Profil de comparaison</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><i class="icon icon-pin" aria-hidden="true" style="font-size:12px"></i></div>
+                        <span style="font-size: 12px;"><strong>Plus c'est éloigné du centre</strong> = Valeur plus élevée</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <h5 style="margin: 0 0 8px 0; font-size: 14px; color: #374151;">
+                    <i class="icon icon-search" aria-hidden="true"></i> Les 7 dimensions analysées :
+                </h5>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 11px;">
+                    <div style="background: #f0f9ff; padding: 6px; border-radius: 4px;">
+                        <strong><i class="icon icon-book" aria-hidden="true"></i> Pression Acad.</strong>
+                        <div style="color: #0369a1;">Stress des études</div>
+                    </div>
+                    <div style="background: #f0fdf4; padding: 6px; border-radius: 4px;">
+                        <strong><i class="icon icon-smile" aria-hidden="true"></i> Satisfaction</strong>
+                        <div style="color: #166534;">Plaire aux études</div>
+                    </div>
+                    <div style="background: #fef2f2; padding: 6px; border-radius: 4px;">
+                        <strong><i class="icon icon-sleep" aria-hidden="true"></i> Sommeil</strong>
+                        <div style="color: #991b1b;">Durée & qualité</div>
+                    </div>
+                    <div style="background: #fef3c7; padding: 6px; border-radius: 4px;">
+                        <strong><i class="icon icon-money" aria-hidden="true"></i> Stress Financier</strong>
+                        <div style="color: #92400e;">Problèmes d'argent</div>
+                    </div>
+                    <div style="background: #f3f4f6; padding: 6px; border-radius: 4px;">
+                        <strong><i class="icon icon-food" aria-hidden="true"></i> Alimentation</strong>
+                        <div style="color: #4b5563;">Habits alimentaires</div>
+                    </div>
+                    <div style="background: #f5f3ff; padding: 6px; border-radius: 4px;">
+                        <strong>⏱️ Heures Travail</strong>
+                        <div style="color: #5b21b6;">Travail + Études</div>
+                    </div>
+                    <div style="background: #ecfdf5; padding: 6px; border-radius: 4px; grid-column: span 2;">
+                        <strong><i class="icon icon-trophy" aria-hidden="true"></i> CGPA</strong>
+                        <div style="color: #047857;">Moyenne académique /10</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 10px;">
+                <h5 style="margin: 0 0 8px 0; font-size: 14px; color: #374151;">
+                    <i class="icon icon-refresh" aria-hidden="true"></i> Modes de comparaison :
+                </h5>
+                <div style="font-size: 12px;">
+                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                        <span style="color: #4f46e5; font-weight: 600;">• Cluster vs Global</span>
+                        <span style="color: #6b7280;">: Compare un cluster à la moyenne de tous les étudiants</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="color: #4f46e5; font-weight: 600;">• Étudiant vs Cluster</span>
+                        <span style="color: #6b7280;">: Compare un étudiant à son cluster</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="background: linear-gradient(135deg, #fdf4ff 0%, #f5f3ff 100%); padding: 10px; border-radius: 8px; border: 1px solid #e9d5ff;">
+                <div style="display: flex; align-items: start; gap: 8px;">
+                    <div style="background: #8b5cf6; color: white; padding: 6px; border-radius: 6px; font-size: 14px;">
+                        <i class="icon icon-light" aria-hidden="true"></i>
+                    </div>
+                    <div>
+                        <p style="margin: 0; font-size: 12px; color: #7c3aed; font-weight: 500;">
+                            <strong>Signaux d'alerte :</strong> Recherchez les zones où le profil s'éloigne 
+                            significativement de la référence. Les écarts >20% sont significatifs.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; font-size: 11px; color: #9ca3af;">
+                <span><i class="icon icon-trend" aria-hidden="true"></i> Données normalisées</span>
+                <span><i class="icon icon-target" aria-hidden="true"></i> 7 dimensions clés</span>
+            </div>
+        </div>
+    `;
+    
+    const container = document.querySelector('#radar-explanation-btn');
+    if (!container) return;
+
+    // NETTOYAGE : On vide le conteneur avant d'ajouter quoi que ce soit
+    container.innerHTML = '';
+
+    // Création du bouton avec effet hover
+    const button = document.createElement('button');
+    button.className = 'comment-button radar-comment-button';
+    button.innerHTML = '💬';
+    button.title = 'Guide du graphique radar - Cliquez pour ouvrir';
+    button.style.cssText = `
+        background: #000000;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s;
+        box-shadow: 0 1px 3px rgba(99, 102, 241, 0.3);
+    `;
+    
+    // Effet hover
+    button.addEventListener('mouseenter', () => {
+        button.style.transform = 'translateY(-2px)';
+        button.style.boxShadow = '0 4px 6px rgba(99, 102, 241, 0.4)';
+    });
+    
+    button.addEventListener('mouseleave', () => {
+        button.style.transform = 'translateY(0)';
+        button.style.boxShadow = '0 1px 3px rgba(99, 102, 241, 0.3)';
+    });
+
+    // Création de la boîte d'explication
+    const box = document.createElement('div');
+    box.className = 'comment-box radar-comment-box';
+    box.innerHTML = explanationContent;
+    box.style.cssText = `
+        display: none;
+        position: absolute;
+        top: 40px;
+        right: 0;
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        border: 1px solid #e5e7eb;
+        z-index: 1000;
+        max-width: 380px;
+        max-height: 80vh;
+        overflow-y: auto;
+        animation: fadeIn 0.3s ease-out;
+    `;
+
+    // Ajout des éléments
+    container.style.position = 'relative';
+    container.appendChild(button);
+    container.appendChild(box);
+
+    // Gestion du clic sur le bouton
+    button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isVisible = box.style.display === 'block';
+        box.style.display = isVisible ? 'none' : 'block';
+        
+        // Animation d'apparition
+        if (box.style.display === 'block') {
+            box.style.opacity = '0';
+            box.style.transform = 'translateY(-10px)';
+            setTimeout(() => {
+                box.style.transition = 'opacity 0.3s, transform 0.3s';
+                box.style.opacity = '1';
+                box.style.transform = 'translateY(0)';
+            }, 10);
+            
+            // Changer le bouton
+            button.innerHTML = '💬';
+            button.style.background = '#000000';
+        } else {
+            button.innerHTML = '💬';
+            button.style.background = '#000000';
+        }
+    });
+
+    // Fermer en cliquant ailleurs
+    document.addEventListener('click', (e) => {
+        if (!container.contains(e.target)) {
+            box.style.display = 'none';
+            button.innerHTML = '💬';
+            button.style.background ='#000000';
+        }
+    });
+
+    // Fermer avec la touche Échap
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && box.style.display === 'block') {
+            box.style.display = 'none';
+            button.innerHTML = '💬';
+            button.style.background = '#000000';
+        }
+    });
+
+    console.log('Bouton d\'explication du radar créé');
+}
+
+// Ajoutez aussi le CSS pour l'animation
+const radarStyles = document.createElement('style');
+radarStyles.textContent = `
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .radar-comment-button:hover {
+        opacity: 0.9;
+    }
+    
+    .radar-comment-box::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    .radar-comment-box::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 3px;
+    }
+    
+    .radar-comment-box::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+    }
+    
+    .radar-comment-box::-webkit-scrollbar-thumb:hover {
+        background: #0c0c0c;
+    }
+`;
+document.head.appendChild(radarStyles);
+
+// Fonction pour mettre à jour toutes les visualisations
+function updateAllVisualizations(filteredData, clusters) {
+    console.log('Mise à jour de toutes les visualisations...');
+    
+    // 1. Scatter plot
+    if (typeof updateScatterPlot === 'function' && scatterPlot) {
+        updateScatterPlot('#cluster-map', filteredData, clusters, currentSelection.projection, currentColorScheme);
+    }
+    
+    // 2. Sunburst
+    try {
+        if (typeof createSunburstChart === 'function') {
+            const container = document.getElementById('bubble-chart-container');
+            if (container) {
+                container.innerHTML = '';
+                createSunburstChart('#bubble-chart-container', filteredData, clusters);
+            }
+        }
+    } catch (error) {
+        console.error('Erreur dans la mise à jour du sunburst:', error);
+    }
+    
+    // 3. Radar chart (si un étudiant ou cluster est sélectionné)
+    if (currentSelection.student) {
+        const student = filteredData.find(d => d.id === currentSelection.student.id);
+        if (student) {
+            updateRadarForStudent(student);
+        }
+    } else if (currentSelection.cluster !== null && clusters[currentSelection.cluster]) {
+        updateRadarForCluster(clusters[currentSelection.cluster]);
+    }
+    
+    // 4. Heatmap (si un cluster est sélectionné)
+    if (currentSelection.cluster !== null && clusters[currentSelection.cluster]) {
+        updateClusterHeatmap(clusters[currentSelection.cluster]);
+    }
+    
+    // 5. Statistiques (si un cluster est sélectionné)
+    if (currentSelection.cluster !== null && clusters[currentSelection.cluster]) {
+        updateClusterStats(clusters[currentSelection.cluster]);
+    }
+    
+    console.log('Toutes les visualisations mises à jour');
+}

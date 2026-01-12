@@ -44,7 +44,7 @@ function createSmallMultiples(container, data, clusters, variable) {
             <p>Variable: ${variable}</p>
             <p>Dimensions: ${containerElement.clientWidth} x ${containerElement.clientHeight}</p>
             <div style="margin-top: 20px; color: #16a34a;">
-                ✅ Le script fonctionne!
+                Le script fonctionne!
             </div>
         </div>
     `;
@@ -115,7 +115,7 @@ function createSmallMultiples(container, data, clusters, variable) {
         }
     });
     
-    console.log('✅ Small multiples test créé avec succès');
+    console.log('Small multiples test créé avec succès');
 }
 
 function showErrorMessage(container, message) {
@@ -128,7 +128,7 @@ function showErrorMessage(container, message) {
         .style('border-radius', '8px')
         .style('border', '2px dashed #d1d5db')
         .html(`
-            <h4 style="color: #dc2626; margin-bottom: 10px;">⚠️ Erreur d'affichage</h4>
+            <h4 style="color: #dc2626; margin-bottom: 10px;"><i class="icon icon-warning" aria-hidden="true"></i> Erreur d'affichage</h4>
             <p>${message}</p>
             <p style="font-size: 12px; margin-top: 10px; color: #9ca3af;">
                 Vérifiez la console pour plus de détails

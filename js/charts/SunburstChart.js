@@ -149,10 +149,9 @@ function createSunburstChart(container, data, clusters) {
         .attr('y', 55)
         .attr('text-anchor', 'middle')
         .style('font-size', '12px')
-        .style('fill', '#6b7280')
-        .text('Cliquez sur un cluster pour voir ses caractéristiques');
+        .style('fill', '#6b7280');
 
-    console.log('✅ Sunburst chart créé avec succès');
+    console.log('Sunburst chart créé avec succès');
 
     /*** Helper Functions ***/
     function getArcColor(d) {

@@ -319,7 +319,7 @@ function updateRadarChart(container, data1, data2, features, title = 'Comparaiso
             .text(getSeriesLabel('series2', title));
     }
     
-    console.log('✅ Radar mis à jour avec succès');
+    console.log('Radar mis à jour avec succès');
 }
 
 // Obtenir le label de la série
