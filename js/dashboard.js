@@ -253,6 +253,7 @@ function initAllCharts() {
     if (typeof initCityTable === 'function') initCityTable();
     if (typeof initRadarChart === 'function') initRadarChart();
     if (typeof initMultiBarChart === 'function') initMultiBarChart();
+    if (typeof initRelationshipChart === 'function') initRelationshipChart();
 }
 
 function updateAllCharts() {

@@ -6,6 +6,7 @@ let groupBy = 'depression';
 let isStacked = false;
 let sortBy = 'none';
 let showValues = true;
+let selectedGroup = null; // Variable pour suivre le groupe sélectionné
 
 function initMultiBarChart() {
     if (barChartInitialized) return;
@@ -79,6 +80,8 @@ function setupEnhancedControls() {
         
         groupSelect.addEventListener('change', function() {
             groupBy = this.value;
+            selectedGroup = null; // Réinitialiser la sélection lors du changement de groupe
+            sortBy = 'none'; // Réinitialiser le tri
             updateMultiBarChart();
         });
     }
@@ -94,29 +97,6 @@ function setupEnhancedControls() {
             updateMultiBarChart();
         });
     }
-    
-    // Ajouter un contrôle de tri si non présent dans le HTML
-    // const existingSort = document.getElementById('bar-sort');
-    // if (!existingSort) {
-    //     const controlsContainer = document.querySelector('.card-header .chart-controls');
-    //     if (controlsContainer) {
-    //         const sortSelect = document.createElement('select');
-    //         sortSelect.id = 'bar-sort';
-    //         sortSelect.className = 'control-select';
-    //         sortSelect.innerHTML = `
-    //             <option value="none">Trier par...</option>
-    //             <option value="value">Valeur maximale</option>
-    //             <option value="group">Groupe</option>
-    //             <option value="variance">Variation</option>
-    //         `;
-    //         controlsContainer.appendChild(sortSelect);
-            
-    //         sortSelect.addEventListener('change', function() {
-    //             sortBy = this.value;
-    //             updateMultiBarChart();
-    //         });
-    //     }
-    // }
 }
 
 function updateMultiBarChart() {
@@ -131,11 +111,6 @@ function updateMultiBarChart() {
     if (barData.length === 0) {
         displayNoDataMessage();
         return;
-    }
-    
-    // Trier les données si nécessaire
-    if (sortBy !== 'none') {
-        sortBarData(barData, sortBy);
     }
     
     // Configuration personnalisée sans "Pression Travail"
@@ -154,10 +129,10 @@ function updateMultiBarChart() {
     ];
     
     const colors = [
-        '#3b82f6', // Bleu
-        '#10b981', // Vert
-        '#f59e0b', // Orange
-        '#ef4444'  // Rouge
+        '#f25656', // Bleu
+        '#3eb698', // Vert
+        'hsl(34, 98%, 69%)', // Orange
+        '#3761fa' 
     ];
     
     // Nettoyer le SVG
@@ -171,8 +146,31 @@ function updateMultiBarChart() {
     const g = barChart.svg.append('g')
         .attr('transform', `translate(${barChart.margin.left}, ${barChart.margin.top})`);
     
-    // Échelles
-    const groups = barData.map(d => d.group);
+    // Déterminer l'ordre des groupes (Déprimés toujours à gauche)
+    let groups;
+    if (groupBy === 'depression') {
+        // Forcer l'ordre : Déprimés à gauche, Non déprimés à droite
+        groups = ['Déprimés', 'Non déprimés'].filter(group => 
+            barData.some(d => d.group === group)
+        );
+    } else if (groupBy === 'gender') {
+        // Forcer l'ordre : Hommes à gauche, Femmes à droite
+        groups = ['Hommes', 'Femmes'].filter(group => 
+            barData.some(d => d.group === group)
+        );
+    }
+    
+    // Trier les données selon l'ordre forcé
+    barData.sort((a, b) => {
+        const indexA = groups.indexOf(a.group);
+        const indexB = groups.indexOf(b.group);
+        return indexA - indexB;
+    });
+    
+    // Appliquer d'autres tris si demandé (sauf 'group' qui est déjà géré)
+    if (sortBy !== 'none' && sortBy !== 'group') {
+        sortBarData(barData, sortBy);
+    }
     
     // Échelle X (groupes)
     const x0 = d3.scaleBand()
@@ -268,7 +266,7 @@ function updateMultiBarChart() {
         drawGroupedBars(g, barData, variables, labels, colors, x0, y, chartHeight);
     }
     
-    // Mettre à jour la légende améliorée
+    // Mettre à jour la légende améliorée avec bouton de réinitialisation
     updateEnhancedLegend(barData, variables, labels, colors);
 }
 
@@ -285,9 +283,11 @@ function calculateBarChartDataCustom(data, groupBy = 'depression') {
     
     // Grouper les données
     if (groupBy === 'depression') {
+        // FORCER L'ORDRE : Déprimés en premier, Non déprimés en second
         groups['Déprimés'] = data.filter(d => d.depression === 1);
         groups['Non déprimés'] = data.filter(d => d.depression === 0);
     } else if (groupBy === 'gender') {
+        // FORCER L'ORDRE : Hommes en premier, Femmes en second
         groups['Hommes'] = data.filter(d => d.gender === 'Male');
         groups['Femmes'] = data.filter(d => d.gender === 'Female');
     }
@@ -295,8 +295,14 @@ function calculateBarChartDataCustom(data, groupBy = 'depression') {
     // Calculer les moyennes pour chaque groupe et variable
     const result = [];
     
-    Object.entries(groups).forEach(([groupName, groupData]) => {
-        if (groupData.length === 0) return;
+    // Maintenir l'ordre des clés pour forcer l'affichage
+    const groupOrder = groupBy === 'depression' 
+        ? ['Déprimés', 'Non déprimés'] 
+        : ['Hommes', 'Femmes'];
+    
+    groupOrder.forEach(groupName => {
+        const groupData = groups[groupName];
+        if (!groupData || groupData.length === 0) return;
         
         const groupResult = { group: groupName };
         
@@ -335,13 +341,19 @@ function drawStackedBars(g, barData, variables, labels, colors, x0, y, chartHeig
         .data(d => d)
         .enter()
         .append('rect')
-        .attr('class', d => `stacked-bar stacked-${d.key}`)
+        .attr('class', d => `stacked-bar stacked-${d.key} ${selectedGroup === d.data.group ? 'selected' : ''}`)
         .attr('x', d => x0(d.data.group))
-        .attr('y', d => y(d[1]))  // y correspond à la partie supérieure du segment
-        .attr('height', d => Math.max(0, y(d[0]) - y(d[1])))  // Hauteur positive
+        .attr('y', d => y(d[1]))
+        .attr('height', d => Math.max(0, y(d[0]) - y(d[1])))
         .attr('width', x0.bandwidth())
         .style('cursor', 'pointer')
-        .style('opacity', 0.85)
+        .style('opacity', d => {
+            // Si un groupe est sélectionné et ce n'est pas ce groupe, réduire l'opacité
+            if (selectedGroup && selectedGroup !== d.data.group) {
+                return 0.3;
+            }
+            return 0.85;
+        })
         .style('transition', 'opacity 0.2s')
         .style('rx', 2)
         .style('ry', 2)
@@ -350,8 +362,8 @@ function drawStackedBars(g, barData, variables, labels, colors, x0, y, chartHeig
             const variableIndex = variables.indexOf(variable);
             const variableLabel = labels[variableIndex];
             const group = d.data.group;
-            const value = d[1] - d[0];  // Valeur de ce segment
-            const total = d[1];  // Somme cumulative à ce point
+            const value = d[1] - d[0];
+            const total = d[1];
             
             showEnhancedTooltip(event, {
                 group,
@@ -363,18 +375,66 @@ function drawStackedBars(g, barData, variables, labels, colors, x0, y, chartHeig
             });
             
             d3.select(this)
-                .style('opacity', 1)
+                .style('opacity', function() {
+                    if (selectedGroup && selectedGroup !== group) {
+                        return 0.5;
+                    }
+                    return 1;
+                })
                 .style('filter', 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))');
         })
-        .on('mouseleave', function() {
+        .on('mouseleave', function(event, d) {
             hideEnhancedTooltip();
             d3.select(this)
-                .style('opacity', 0.85)
+                .style('opacity', function() {
+                    if (selectedGroup && selectedGroup !== d.data.group) {
+                        return 0.3;
+                    }
+                    return 0.85;
+                })
                 .style('filter', 'none');
         })
+        // Dans la fonction drawGroupedBars, modifier l'événement click pour les barres individuelles
         .on('click', function(event, d) {
-            const group = d.data.group;
-            handleSelection(getSelectionTypeFromGroup(group), getSelectionValueFromGroup(group));
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // Stocker la variable cliquée
+            const variable = variables[i];
+            
+            // Afficher le graphique de relation
+            if (typeof showRelationshipChart === 'function') {
+                showRelationshipChart(variable);
+            }
+        })
+
+        // Ajouter aussi dans drawStackedBars pour les barres empilées
+        .on('click', function(event, d) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            const variable = d.key;
+            
+            // Afficher le graphique de relation
+            if (typeof showRelationshipChart === 'function') {
+                showRelationshipChart(variable);
+            }
+        })
+
+        .on('click', function(event, d) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            const variable = d.key;
+            console.log('Barre empilée cliquée:', variable);
+            
+            // Afficher le graphique de relation
+            if (typeof showRelationshipChart === 'function') {
+                console.log('Appel de showRelationshipChart avec:', variable);
+                showRelationshipChart(variable);
+            } else {
+                console.error('showRelationshipChart non disponible');
+            }
         });
     
     // Ajouter les valeurs sur les barres
@@ -385,7 +445,7 @@ function drawStackedBars(g, barData, variables, labels, colors, x0, y, chartHeig
                 const value = d[1] - d[0];
                 const group = d.data.group;
                 const xPos = x0(group) + x0.bandwidth() / 2;
-                const yPos = y(d[1] - value / 2);  // Position au milieu du segment
+                const yPos = y(d[1] - value / 2);
                 
                 if (value > 0.3) {
                     g.append('text')
@@ -395,9 +455,9 @@ function drawStackedBars(g, barData, variables, labels, colors, x0, y, chartHeig
                         .attr('text-anchor', 'middle')
                         .attr('dy', '0.35em')
                         .style('font-size', '9px')
-                        .style('fill', 'white')
+                        .style('fill', d => selectedGroup && selectedGroup !== group ? '#94a3b8' : 'white')
                         .style('font-weight', '600')
-                        .style('text-shadow', '1px 1px 2px rgba(0,0,0,0.3)')
+                        .style('text-shadow', d => selectedGroup && selectedGroup !== group ? 'none' : '1px 1px 2px rgba(0,0,0,0.3)')
                         .style('pointer-events', 'none')
                         .text(value.toFixed(1));
                 }
@@ -417,8 +477,8 @@ function drawStackedBars(g, barData, variables, labels, colors, x0, y, chartHeig
                 .attr('y', yPos)
                 .attr('text-anchor', 'middle')
                 .style('font-size', '11px')
-                .style('fill', '#1e293b')
-                .style('font-weight', '700')
+                .style('fill', selectedGroup && selectedGroup !== d.group ? '#94a3b8' : '#1e293b')
+                .style('font-weight', selectedGroup && selectedGroup !== d.group ? '500' : '700')
                 .style('pointer-events', 'none')
                 .text(total.toFixed(1));
         }
@@ -437,7 +497,7 @@ function drawGroupedBars(g, barData, variables, labels, colors, x0, y, chartHeig
             .data(barData)
             .enter()
             .append('rect')
-            .attr('class', `bar bar-${variable}`)
+            .attr('class', d => `bar bar-${variable} ${selectedGroup === d.group ? 'selected' : ''}`)
             .attr('x', d => x0(d.group) + x1(variable))
             .attr('y', d => {
                 const val = d[variable];
@@ -450,7 +510,13 @@ function drawGroupedBars(g, barData, variables, labels, colors, x0, y, chartHeig
             })
             .attr('fill', colors[i])
             .style('cursor', 'pointer')
-            .style('opacity', 0.85)
+            .style('opacity', d => {
+                // Si un groupe est sélectionné et ce n'est pas ce groupe, réduire l'opacité
+                if (selectedGroup && selectedGroup !== d.group) {
+                    return 0.3;
+                }
+                return 0.85;
+            })
             .style('transition', 'all 0.2s')
             .style('rx', 3)
             .style('ry', 3)
@@ -467,19 +533,51 @@ function drawGroupedBars(g, barData, variables, labels, colors, x0, y, chartHeig
                 });
                 
                 d3.select(this)
-                    .style('opacity', 1)
+                    .style('opacity', function() {
+                        if (selectedGroup && selectedGroup !== d.group) {
+                            return 0.5;
+                        }
+                        return 1;
+                    })
                     .style('transform', 'translateY(-2px)')
                     .style('filter', 'drop-shadow(0 4px 8px rgba(0,0,0,0.15))');
             })
-            .on('mouseleave', function() {
+            .on('mouseleave', function(event, d) {
                 hideEnhancedTooltip();
                 d3.select(this)
-                    .style('opacity', 0.85)
+                    .style('opacity', function() {
+                        if (selectedGroup && selectedGroup !== d.group) {
+                            return 0.3;
+                        }
+                        return 0.85;
+                    })
                     .style('transform', 'translateY(0)')
                     .style('filter', 'none');
             })
             .on('click', function(event, d) {
-                handleSelection(getSelectionTypeFromGroup(d.group), getSelectionValueFromGroup(d.group));
+                event.preventDefault();
+                event.stopPropagation();
+                
+                const group = d.group;
+                
+                // Si on clique sur un groupe déjà sélectionné, désélectionner
+                if (selectedGroup === group) {
+                    selectedGroup = null;
+                    // Réinitialiser le filtre
+                    if (typeof handleSelection === 'function') {
+                        handleSelection(getSelectionTypeFromGroup(group), null);
+                    }
+                } else {
+                    // Sinon, sélectionner ce groupe
+                    selectedGroup = group;
+                    // Appliquer le filtre correspondant
+                    if (typeof handleSelection === 'function') {
+                        handleSelection(getSelectionTypeFromGroup(group), getSelectionValueFromGroup(group));
+                    }
+                }
+                
+                // Re-dessiner le graphique avec la nouvelle sélection
+                updateMultiBarChart();
             });
         
         // Ajouter les valeurs sur les barres
@@ -493,7 +591,7 @@ function drawGroupedBars(g, barData, variables, labels, colors, x0, y, chartHeig
                         .attr('y', y(value) - 5)
                         .attr('text-anchor', 'middle')
                         .style('font-size', '10px')
-                        .style('fill', '#475569')
+                        .style('fill', selectedGroup && selectedGroup !== d.group ? '#94a3b8' : '#475569')
                         .style('font-weight', '600')
                         .style('pointer-events', 'none')
                         .text(value.toFixed(1));
@@ -515,6 +613,11 @@ function showEnhancedTooltip(event, data) {
     
     const riskLevel = getRiskLevel(data.value, data.variable);
     
+    // Ajouter une instruction pour la sélection/désélection
+    const clickAction = selectedGroup === data.group ? 
+        'Cliquer pour réinitialiser la sélection' : 
+        'Cliquer pour sélectionner ce groupe';
+    
     tooltip
         .style('display', 'block')
         .style('left', (event.pageX + 15) + 'px')
@@ -523,7 +626,9 @@ function showEnhancedTooltip(event, data) {
             <div class="tooltip-container">
                 <div class="tooltip-header" style="background: ${data.color}; padding: 10px 12px; color: white; border-radius: 10px 10px 0 0;">
                     <strong style="font-size: 14px;">${data.group}</strong>
-                    <span class="tooltip-risk ${riskLevel.class}" style="float: right; font-size: 11px; padding: 2px 8px; border-radius: 12px; background: rgba(255,255,255,0.2);">
+                    ${selectedGroup === data.group ? 
+                    '<span class="tooltip-selected" style="float: right; font-size: 11px; padding: 2px 8px; border-radius: 12px; background: rgba(255,255,255,0.3);"><i class="fas fa-check" style="margin-right:4px"></i>Sélectionné</span>' : ''}
+                    <span class="tooltip-risk ${riskLevel.class}" style="float: right; font-size: 11px; padding: 2px 8px; border-radius: 12px; background: rgba(255,255,255,0.2); margin-right: ${selectedGroup === data.group ? '8px' : '0'};">
                         ${riskLevel.text}
                     </span>
                 </div>
@@ -548,7 +653,7 @@ function showEnhancedTooltip(event, data) {
                     </div>
                     ` : ''}
                     <div class="tooltip-actions" style="text-align: center; font-size: 11px; color: #94a3b8; padding-top: 8px; border-top: 1px solid #e2e8f0;">
-                        <i class="fas fa-hand-point-up" style="margin-right:6px"></i>Cliquer pour filtrer ce groupe
+                        <i class="fas fa-hand-point-up" style="margin-right:6px"></i>${clickAction}
                     </div>
                 </div>
             </div>
@@ -646,13 +751,20 @@ function updateEnhancedLegend(barData, variables, labels, colors) {
         .append('div')
         .attr('class', 'enhanced-legend')
         .style('display', 'flex')
-        .style('justify-content', 'center')
-        .style('gap', '20px')
-        .style('flex-wrap', 'wrap')
+        .style('flex-direction', 'column')
+        .style('gap', '15px')
         .style('padding', '15px')
         .style('background', '#f8fafc')
         .style('border-radius', '8px')
         .style('margin-top', '10px');
+    
+    // Première ligne : les variables
+    const variablesRow = legend
+        .append('div')
+        .style('display', 'flex')
+        .style('justify-content', 'center')
+        .style('gap', '20px')
+        .style('flex-wrap', 'wrap');
     
     variables.forEach((variable, i) => {
         const label = labels[i];
@@ -662,7 +774,7 @@ function updateEnhancedLegend(barData, variables, labels, colors) {
         const maxValue = d3.max(barData, d => d[variable]);
         const minValue = d3.min(barData, d => d[variable]);
         
-        const legendItem = legend
+        const legendItem = variablesRow
             .append('div')
             .attr('class', 'legend-item')
             .style('display', 'flex')
@@ -679,9 +791,24 @@ function updateEnhancedLegend(barData, variables, labels, colors) {
             .on('mouseleave', function() {
                 resetVariableHighlight();
             })
-            .on('click', () => {
-                highlightVariable(variable);
-            });
+            .on('click', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                console.log('Bouton réinitialiser cliqué');
+                
+                // Appeler la fonction de réinitialisation
+                resetBarChartSelection();
+                
+                // Feedback visuel
+                d3.select(this)
+                    .style('background', '#10b981')
+                    .style('color', 'white')
+                    .transition()
+                    .duration(300)
+                    .style('background', '#f1f5f9')
+                    .style('color', '#475569');
+            })
         
         legendItem
             .append('div')
@@ -710,21 +837,138 @@ function updateEnhancedLegend(barData, variables, labels, colors) {
             .text(`Moy: ${meanValue.toFixed(1)} | Min: ${minValue.toFixed(1)} | Max: ${maxValue.toFixed(1)}`);
     });
     
-    const modeLegend = legendContainer
+    // Deuxième ligne : mode et bouton de réinitialisation
+    const actionsRow = legend
         .append('div')
-        .style('text-align', 'center')
-        .style('font-size', '11px')
-        .style('color', '#64748b')
-        .style('margin-top', '10px');
+        .style('display', 'flex')
+        .style('justify-content', 'space-between')
+        .style('align-items', 'center')
+        .style('margin-top', '10px')
+        .style('padding-top', '10px')
+        .style('border-top', '1px solid #e2e8f0');
     
-    modeLegend.html(`
-        <div style="display: inline-flex; align-items: center; gap: 8px; background: #f1f5f9; padding: 6px 12px; border-radius: 6px;">
+    // Mode d'affichage
+    const modeLegend = actionsRow
+        .append('div')
+        .style('display', 'inline-flex')
+        .style('align-items', 'center')
+        .style('gap', '8px')
+        .style('font-size', '11px')
+        .style('color', '#64748b');
+    
+  /*  modeLegend.html(`
+        <div style="display: flex; align-items: center; gap: 4px;">
             <div style="width: 8px; height: 8px; background: #3b82f6; border-radius: 2px;"></div>
-            <span>Barres groupées</span>
-            <div style="width: 8px; height: 8px; background: linear-gradient(to right, #3b82f6, #10b981, #f59e0b, #ef4444); border-radius: 2px;"></div>
-            <span>Barres empilées</span>
+            <span>Groupé</span>
         </div>
-    `);
+        <div style="display: flex; align-items: center; gap: 4px; margin-left: 12px;">
+            <div style="width: 8px; height: 8px; background: linear-gradient(to right, #3b82f6, #10b981, #f59e0b, #ef4444); border-radius: 2px;"></div>
+            <span>Empilé</span>
+        </div>
+    `);*/
+    
+    // BOUTON DE RÉINITIALISATION - CORRIGÉ
+    if (selectedGroup) {
+        const resetButton = actionsRow
+            .append('button')
+            .attr('class', 'reset-button')
+            .attr('type', 'button') // IMPORTANT: Spécifier le type
+            .style('display', 'flex')
+            .style('align-items', 'center')
+            .style('gap', '6px')
+            .style('padding', '6px 12px')
+            .style('background', '#f1f5f9')
+            .style('border', '1px solid #e2e8f0')
+            .style('border-radius', '6px')
+            .style('cursor', 'pointer')
+            .style('color', '#475569')
+            .style('font-size', '12px')
+            .style('font-weight', '600')
+            .style('transition', 'all 0.2s')
+            .style('outline', 'none')
+            .style('font-family', 'inherit')
+            .style('border', 'none') // Éviter les conflits de styles
+            .on('mouseover', function() {
+                d3.select(this)
+                    .style('background', '#e2e8f0')
+                    .style('transform', 'translateY(-1px)')
+                    .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)');
+            })
+            .on('mouseleave', function() {
+                d3.select(this)
+                    .style('background', '#f1f5f9')
+                    .style('transform', 'translateY(0)')
+                    .style('box-shadow', 'none');
+            })
+            .on('click', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                console.log('Bouton réinitialiser cliqué', selectedGroup);
+                
+                // Réinitialiser la sélection - MÊME LOGIQUE QUE LE CLICK SUR LA BARRE
+                selectedGroup = null;
+                
+                // Réinitialiser le filtre si la fonction existe - MÊME QUE LE CLICK SUR BARRE
+                if (typeof handleSelection === 'function') {
+                    // Utiliser null pour les deux paramètres comme dans le click sur barre
+                    handleSelection(null, null);
+                } else {
+                    console.warn('handleSelection non disponible');
+                }
+                
+                // Forcer une mise à jour complète - MÊME QUE LE CLICK SUR BARRE
+                updateMultiBarChart();
+                
+                // Feedback visuel
+                d3.select(this)
+                    .style('background', '#10b981')
+                    .style('color', 'white')
+                    .transition()
+                    .duration(300)
+                    .style('background', '#f1f5f9')
+                    .style('color', '#475569');
+            })
+            .on('keydown', function(event) {
+                // Permettre l'activation avec la touche Entrée
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    d3.select(this).dispatch('click');
+                }
+            });
+        
+     /*   resetButton.html(`
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            Réinitialiser (${selectedGroup})
+        `);*/
+        
+        // Ajouter un attribut tabindex pour l'accessibilité
+        resetButton.attr('tabindex', '0');
+    } else {
+        // Afficher un état indiquant que le graphique est déjà à l'état par défaut
+        const stateInfo = actionsRow
+            .append('div')
+            .style('display', 'flex')
+            .style('align-items', 'center')
+            .style('gap', '6px')
+            .style('padding', '6px 12px')
+            .style('background', '#f8fafc')
+            .style('border', '1px solid #d1fae5')
+            .style('border-radius', '6px')
+            .style('color', '#059669')
+            .style('font-size', '12px')
+            .style('font-weight', '500');
+        
+      /*  stateInfo.html(`
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            Affichage par défaut (${groupBy === 'depression' ? 'Déprimés ↔ Non déprimés' : 'Hommes ↔ Femmes'})
+        `);*/
+    }
 }
 
 function getChartTitle() {
@@ -751,7 +995,8 @@ function sortBarData(barData, sortType) {
                 return sumB - sumA;
                 
             case 'group':
-                return a.group.localeCompare(b.group);
+                // Le tri par groupe est déjà géré dans updateMultiBarChart
+                return 0;
                 
             case 'variance':
                 const valuesA = variables.map(v => a[v]);
@@ -782,7 +1027,7 @@ function displayNoDataMessage() {
         .style('font-size', '16px')
         .style('fill', '#94a3b8')
         .style('font-weight', '500')
-        .text('');
+        .text('Aucune donnée');
     
     barChart.svg.append('text')
         .attr('x', barChart.width / 2)
@@ -818,12 +1063,24 @@ function highlightVariable(variable) {
     barChart.svg.selectAll('.bar')
         .transition()
         .duration(300)
-        .style('opacity', 0.3);
+        .style('opacity', function(d) {
+            // Conserver l'opacité pour les groupes sélectionnés
+            if (selectedGroup && d.group === selectedGroup) {
+                return 0.85;
+            }
+            return 0.3;
+        });
     
     barChart.svg.selectAll(`.bar-${variable}`)
         .transition()
         .duration(300)
-        .style('opacity', 1)
+        .style('opacity', function(d) {
+            // Conserver l'opacité pour les groupes sélectionnés
+            if (selectedGroup && d.group === selectedGroup) {
+                return 1;
+            }
+            return 0.85;
+        })
         .style('filter', 'drop-shadow(0 0 8px rgba(0,0,0,0.3))');
 }
 
@@ -831,7 +1088,13 @@ function resetVariableHighlight() {
     barChart.svg.selectAll('.bar')
         .transition()
         .duration(300)
-        .style('opacity', 0.85)
+        .style('opacity', function(d) {
+            // Restaurer l'opacité selon la sélection
+            if (selectedGroup && selectedGroup !== d.group) {
+                return 0.3;
+            }
+            return 0.85;
+        })
         .style('filter', 'none');
 }
 
@@ -849,6 +1112,79 @@ function getSelectionValueFromGroup(group) {
     return group;
 }
 
+// Fonction pour réinitialiser complètement le bar chart
+function resetBarChartToDefault() {
+    // Réinitialiser toutes les variables
+    selectedGroup = null;
+    groupBy = 'depression';
+    isStacked = false;
+    sortBy = 'none';
+    showValues = true;
+    
+    // Mettre à jour les contrôles UI
+    const groupSelect = document.getElementById('bar-group');
+    if (groupSelect) {
+        groupSelect.value = 'depression';
+    }
+    
+    const toggleBtn = document.getElementById('toggle-stack');
+    if (toggleBtn) {
+        toggleBtn.innerHTML = '<i class="fas fa-chart-line" aria-hidden="true" style="margin-right:6px"></i> Vue empilée';
+        toggleBtn.classList.remove('active');
+    }
+    
+    // Réinitialiser le filtre si la fonction existe
+    if (typeof handleSelection === 'function') {
+        handleSelection(null, null);
+    }
+    
+    // Mettre à jour le graphique
+    updateMultiBarChart();
+    
+    // Feedback visuel
+    if (barChart && barChart.svg) {
+        // Flash vert pour indiquer la réinitialisation
+        const flash = barChart.svg
+            .append('rect')
+            .attr('width', barChart.width)
+            .attr('height', barChart.height)
+            .attr('fill', 'rgba(16, 185, 129, 0.15)')
+            .attr('rx', 8)
+            .style('pointer-events', 'none')
+            .style('z-index', 100);
+        
+        flash.transition()
+            .duration(800)
+            .style('opacity', 0)
+            .remove();
+    }
+}
+
+// Fonction pour réinitialiser uniquement la sélection
+// Fonction pour réinitialiser uniquement la sélection - SIMPLIFIÉE
+function resetBarChartSelection() {
+    console.log('resetBarChartSelection appelée');
+    
+    // Réinitialiser la sélection
+    selectedGroup = null;
+    
+    // Réinitialiser le filtre si la fonction existe
+    if (typeof handleSelection === 'function') {
+        console.log('Appel de handleSelection(null, null)');
+        handleSelection(null, null);
+    } else {
+        console.warn('handleSelection non disponible');
+    }
+    
+    // Forcer un redessin
+    if (barChartInitialized && barChart) {
+        console.log('Mise à jour du graphique');
+        updateMultiBarChart();
+    }
+}
+
 // Exposer les fonctions
 window.initMultiBarChart = initMultiBarChart;
 window.updateMultiBarChart = updateMultiBarChart;
+window.resetBarChartSelection = resetBarChartSelection;
+window.resetBarChartToDefault = resetBarChartToDefault;

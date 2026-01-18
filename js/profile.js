@@ -1,18 +1,23 @@
 // js/profiling.js
 
-
 // Variables globales
+// Variables globales MODIFIÉES
 let rawData = [];
 let processedData = [];
 let clusters = [];
 let currentSelection = {
     cluster: null,
     student: null,
-    projection: 'pca'
+    projection: 'tsne'
 };
+let isFiltering = false;
+let lastFilterTime = 0;
+let originalClusters = [];
+let originalData = []; // NOUVEAU: Stocker les données originales complètes
+let currentFilterType = 'all'; // NOUVEAU: 'all', 'cluster', 'depression', 'academic', 'suicidal'
+let filterManager = null; // NOUVEAU: Référence au gestionnaire de filtres
 
-
-// Variables de configuration
+// Variables de configuration (inchangées)
 const CONFIG = {
     numClusters: 5,
     features: [
@@ -34,9 +39,8 @@ const CONFIG = {
         'cgpa'
     ]
 };
-
 // Initialisation principale
-// Initialisation principale - VERSION FINALE
+// Initialisation principale
 async function initProfiling() {
     showLoading(true);
     
@@ -47,31 +51,45 @@ async function initProfiling() {
         // 2. Prétraiter les données
         processedData = preprocessStudentData(rawData);
         
-        // 3. Effectuer le clustering
+        // 3. Sauvegarder les données originales COMPLÈTES
+        originalData = JSON.parse(JSON.stringify(processedData));
+        
+        // 4. Effectuer le clustering
         clusters = performClustering(processedData, CONFIG.numClusters);
         
-        // 4. Mettre à jour les KPIs
+        // 5. Sauvegarder les clusters originaux
+        originalClusters = JSON.parse(JSON.stringify(clusters));
+        
+        // 6. Initialiser le type de filtre
+        currentFilterType = 'all';
+        window.currentFilterType = 'all';
+        
+        // 7. Mettre à jour les KPIs
         updateKPIs();
         
-        // 5. Initialiser les visualisations
+        // 8. Initialiser les visualisations
         initializeVisualizations();
         
-        // 6. Initialiser les événements
+        // 9. Initialiser les événements
         initializeEventListeners();
         
-        // 7. Initialiser les filtres avec la fonction de callback
-        const filterManager = setupFilters((filteredData) => {
-            console.log('Callback des filtres appelé avec', filteredData.length, 'données');
-            handleFilterChange(filteredData);
-        });
+        // 10. Initialiser les filtres - NOUVELLE VERSION
+        filterManager = setupFilters(
+            (filteredData, filterType) => {
+                console.log('Callback des filtres appelé avec', filteredData.length, 'données, type:', filterType);
+                handleFilterChange(filteredData, filterType);
+            },
+            originalData // Passer les données originales
+        );
         
-        // 8. Sélectionner un cluster par défaut
+        // 11. Sélectionner un cluster par défaut
         selectCluster(0);
         
-        // 9. Initialiser la table des couleurs
+        // 12. Initialiser la table des couleurs
         initializeColorTable();
         
         console.log('Profiling initialisé avec succès');
+        console.log('Données originales:', originalData.length, 'étudiants');
         
     } catch (error) {
         console.error("Erreur lors de l'initialisation:", error);
@@ -82,37 +100,18 @@ async function initProfiling() {
 }
 
 // Mettre à jour les KPIs
-// Mettre à jour les KPIs
 function updateKPIs() {
     const total = processedData.length;
     
-    // VÉRIFIEZ CE QUI SE PASSE DANS LA CONSOLE
-    console.log("Vérification des données de dépression...");
-    console.log("Premier étudiant:", processedData[0]);
-    console.log("Sa valeur depression:", processedData[0].depression);
-    console.log("Type de depression:", typeof processedData[0].depression);
+    // Comptage de la dépression
+    const depressed = processedData.filter(d => {
+        const val = d.depression;
+        if (typeof val === 'number') return val === 1;
+        if (typeof val === 'string') return val.toString().trim() === '1';
+        return false;
+    }).length;
     
-    // Comptez avec différentes méthodes pour déboguer
-    const depressed1 = processedData.filter(d => d.depression === 1).length;
-    const depressedString = processedData.filter(d => d.depression === "1").length;
-    const depressedTruthy = processedData.filter(d => d.depression).length;
-    const depressedGreater0 = processedData.filter(d => d.depression > 0).length;
-    
-    console.log(`Méthode 1 (=== 1): ${depressed1}`);
-    console.log(`Méthode 2 (=== "1"): ${depressedString}`);
-    console.log(`Méthode 3 (truthy): ${depressedTruthy}`);
-    console.log(`Méthode 4 (> 0): ${depressedGreater0}`);
-    
-    // Essayez de voir toutes les valeurs uniques
-    const uniqueValues = [...new Set(processedData.slice(0, 100).map(d => d.depression))];
-    console.log("Valeurs uniques (100 premiers):", uniqueValues.sort((a, b) => a - b));
-    
-    // Utilisez la méthode qui fonctionne
-    const depressed = depressed1; // ou une autre méthode selon le débogage
-    
-    const depressionRate = ((depressed / total) * 100).toFixed(1);
-    
-    console.log(`Résultat: ${depressed}/${total} = ${depressionRate}%`);
+    const depressionRate = total > 0 ? ((depressed / total) * 100).toFixed(1) : '0.0';
     
     // Trouver le facteur de risque principal
     const riskFactors = calculateRiskFactors();
@@ -126,27 +125,25 @@ function updateKPIs() {
 
 // Initialiser les visualisations
 function initializeVisualizations() {
-    
-    
     try {
         console.log('Initialisation des visualisations...');
         
+        // Initialiser les boutons d'explication
         try {
             initializeExplanationButton();
+            initializeRadarExplanationButton();
         } catch (error) {
-            console.error('Erreur dans le bouton d\'explication:', error);
+            console.error('Erreur dans les boutons d\'explication:', error);
         }
+        
+        // Initialiser la table des couleurs
         try {
-    initializeRadarExplanationButton();
-} catch (error) {
-    console.error('Erreur dans le bouton d\'explication radar:', error);
-}
-         try {
             initializeColorTable();
             setupClusterClickInTable();
         } catch (error) {
             console.error('Erreur dans la table des couleurs:', error);
         }
+        
         // 1. Scatter plot
         try {
             if (typeof createScatterPlot === 'function') {
@@ -166,7 +163,6 @@ function initializeVisualizations() {
         
         // 2. Radar chart
         try {
-            // Créer le radar chart avec les features
             createRadarChart('#profile-radar', CONFIG.featureKeys);
             
             // Mettre à jour avec des données par défaut
@@ -176,7 +172,6 @@ function initializeVisualizations() {
                     updateRadarForCluster(clusterData);
                 }
             }, 500);
-            
         } catch (error) {
             console.error('Erreur dans radar chart:', error);
         }
@@ -189,26 +184,22 @@ function initializeVisualizations() {
         } catch (error) {
             console.error('Erreur dans heatmap:', error);
         }
-
         
-        // 4. Small multiples
-       try {
-    if (typeof createSunburstChart === 'function') {
-        createSunburstChart('#bubble-chart-container', processedData, clusters);
-    } else {
-        console.warn('createSunburstChart non disponible');
-    }
-} catch (error) {
-    console.error('Erreur dans sunburst chart:', error);
-}
-
-
-       
-                
+        // 4. Sunburst chart
+        try {
+            if (typeof createSunburstChart === 'function') {
+                createSunburstChart('#bubble-chart-container', processedData, clusters);
+            } else {
+                console.warn('createSunburstChart non disponible');
+            }
+        } catch (error) {
+            console.error('Erreur dans sunburst chart:', error);
+        }
+        
         // 5. Légende
         createClusterLegend();
         
-        // 6. Sélecteur
+        // 6. Sélecteur d'étudiants
         populateStudentSelector();
         
         console.log('Visualisations initialisées avec succès');
@@ -218,11 +209,475 @@ function initializeVisualizations() {
     }
 }
 
-// Créer la légende des clusters
+// CAS 1: Mode CLUSTER
+function handleClusterMode(filteredData) {
+    console.log('Mode CLUSTER activé');
+    
+    // IMPORTANT: Pour le mode cluster, on utilise TOUJOURS les données ORIGINALES
+    // On ignore les données filtrées passées en paramètre
+    
+    // 1. Restaurer toutes les données originales
+    processedData = JSON.parse(JSON.stringify(originalData));
+    
+    // 2. Recréer les clusters avec TOUTES les données
+    const dataForClustering = processedData.map(d => ({...d}));
+    clusters = performClustering(dataForClustering, CONFIG.numClusters);
+    
+    // 3. Mettre à jour les IDs de cluster
+    processedData.forEach((student, index) => {
+        if (dataForClustering[index]) {
+            student.cluster_id = dataForClustering[index].cluster_id;
+        }
+    });
+    
+    // 4. Mettre à jour toutes les visualisations
+    updateAllVisualizations();
+    
+    console.log('Mode CLUSTER activé avec', processedData.length, 'étudiants');
+}
+
+// CAS 2: Mode "Tous" (pas de filtre)
+function handleAllMode() {
+    console.log('Mode TOUS activé');
+    
+    // Restaurer l'état original complet
+    restoreOriginalData();
+}
+
+
+// CAS 3: Autres filtres (dépression, academic, suicidal)
+function handleOtherFilterMode(filteredData, filterType) {
+    console.log('Mode filtre', filterType, 'activé avec', filteredData.length, 'données');
+    
+    // Pour les autres filtres, on utilise les données filtrées
+    // MAIS on garde la structure des clusters existants
+    
+    // 1. Mettre à jour les données avec les données filtrées
+    processedData = [...filteredData];
+    
+    // 2. Filtrer les clusters pour ne garder que les étudiants qui passent le filtre
+    const filteredClusters = clusters.map(clusterArray => 
+        clusterArray.filter(student => 
+            filteredData.some(f => f.id === student.id)
+        )
+    ).filter(cluster => cluster.length > 0);
+    
+    // 3. Si tous les clusters sont vides, restaurer
+    if (filteredClusters.length === 0) {
+        console.warn('Tous les clusters sont vides après filtrage');
+        restoreOriginalData();
+        return;
+    }
+    
+    // 4. Mettre à jour les clusters
+    clusters = filteredClusters;
+    
+    // 5. Ajuster les IDs de cluster
+    adjustClusterIDs();
+    
+    // 6. Mettre à jour toutes les visualisations
+    updateAllVisualizations();
+}
+
+
+// Gérer les changements de filtres avec gestion intelligente des transitions
+// Gérer les changements de filtres avec gestion intelligente des transitions
+function handleFilterChange(filteredData, filterType = 'all') {
+    // Debounce: Empêcher les clics rapides
+    const now = Date.now();
+    if (isFiltering && (now - lastFilterTime < 800)) {
+        console.log('Filtrage en cours, ignore ce clic');
+        return;
+    }
+    
+    lastFilterTime = now;
+    isFiltering = true;
+    
+    // Ajouter une indication visuelle
+    document.body.classList.add('filtering');
+    
+    console.log('Filtres appliqués, données filtrées:', filteredData.length, 'Type de filtre:', filterType);
+    console.log('Type de filtre précédent:', currentFilterType);
+    
+    if (!filteredData || filteredData.length === 0) {
+        console.warn('Aucune donnée après filtrage');
+        restoreOriginalData();
+        isFiltering = false;
+        document.body.classList.remove('filtering');
+        return;
+    }
+    
+    // Mettre à jour le type de filtre dans window
+    window.currentFilterType = filterType;
+    
+    try {
+        const previousFilterType = currentFilterType;
+        currentFilterType = filterType;
+        
+        console.log('Transition:', previousFilterType, '→', currentFilterType);
+        
+        // CAS 1: Mode CLUSTER (on recalcule les clusters)
+        if (filterType === 'cluster') {
+            handleClusterMode(filteredData);
+        }
+        // CAS 2: Mode "Tous" (on restaure tout)
+        else if (filterType === 'all') {
+            handleAllMode();
+        }
+        // CAS 3: Mode "Suicidal" - C'EST LE CHANGEMENT IMPORTANT !
+        else if (filterType === 'suicidal') {
+            // Pour le mode suicidal, on utilise TOUTES les données
+            // Mais on va juste changer les couleurs dans le scatter plot
+            handleSuicidalMode();
+        }
+        // CAS 4: Autres filtres (dépression, academic)
+        else {
+            handleOtherFilterMode(filteredData, filterType);
+        }
+        
+        console.log('Filtrage terminé avec succès. Type courant:', currentFilterType);
+        
+    } catch (error) {
+        console.error('Erreur lors du filtrage:', error);
+        // En cas d'erreur, restaurer tout
+        restoreOriginalData();
+        currentFilterType = 'all';
+    } finally {
+        // Réactiver le filtrage après un délai
+        setTimeout(() => {
+            isFiltering = false;
+            document.body.classList.remove('filtering');
+        }, 500);
+    }
+}
+
+function handleSuicidalMode() {
+    console.log('Mode SUICIDAL activé - seulement changement de couleurs');
+    
+    // 1. Restaurer toutes les données originales
+    processedData = JSON.parse(JSON.stringify(originalData));
+    
+    // 2. Restaurer les clusters originaux
+    clusters = JSON.parse(JSON.stringify(originalClusters));
+    
+    // 3. Forcer le schéma de couleurs à "suicidal"
+    document.getElementById('color-scheme').value = 'suicidal';
+    
+    // 4. Mettre à jour toutes les visualisations
+    updateAllVisualizationsForSuicidalMode();
+    
+    console.log('Mode SUICIDAL activé avec', processedData.length, 'étudiants');
+}
+
+// Fonction spéciale pour mettre à jour les visualisations en mode suicidal
+function updateAllVisualizationsForSuicidalMode() {
+    console.log('Mise à jour en mode SUICIDAL avec', clusters.length, 'clusters');
+    
+    // A. Scatter plot avec couleurs par statut suicidaire
+    updateScatterPlotForSuicidalMode();
+    
+    // B. KPIs
+    updateKPIs();
+    
+    // C. Légende (pas nécessaire pour le mode suicidal)
+    createClusterLegend();
+    
+    // D. Table des couleurs
+    createColorTable();
+    
+    // E. Sélecteur d'étudiants
+    populateStudentSelector();
+    
+    // F. Adapter la sélection
+    adaptCurrentSelection();
+    
+    // G. Sunburst chart
+    updateSunburstChart();
+    
+    console.log('Visualisations mises à jour pour le mode suicidal');
+}
+
+// Fonction pour mettre à jour le scatter plot en mode suicidal
+function updateScatterPlotForSuicidalMode() {
+    // Limiter les données pour le scatter plot
+    let dataToDisplay = processedData;
+    if (dataToDisplay.length > 1500) {
+        dataToDisplay = d3.shuffle(dataToDisplay).slice(0, 1500);
+    }
+    
+    // Fonction pour déterminer la couleur basée sur le statut suicidaire
+    function getSuicidalColor(student) {
+        const isSuicidal = checkIfSuicidal(student);
+        return isSuicidal ? '#e15759' : '#59A14F'; // Rouge pour suicidaire, Vert pour non-suicidaire
+    }
+    
+    // Vérifier si un étudiant a des pensées suicidaires
+    function checkIfSuicidal(student) {
+        const val = student.hasSuicidalThoughts || student.suicidal_thoughts || student.suicide_risk || student.suicidal;
+        
+        if (val === undefined || val === null) return false;
+        
+        if (typeof val === 'boolean') return val === true;
+        if (typeof val === 'number') return val === 1;
+        if (typeof val === 'string') {
+            const lowerVal = val.toString().toLowerCase().trim();
+            return (lowerVal === 'true' || lowerVal === 'yes' || lowerVal === '1' || lowerVal === 'oui' || lowerVal === 'vrai');
+        }
+        return false;
+    }
+    
+    // Appliquer les couleurs aux étudiants
+    dataToDisplay.forEach(student => {
+        student.tempColor = getSuicidalColor(student);
+    });
+    
+    if (typeof createScatterPlot === 'function') {
+        // Si votre fonction createScatterPlot accepte un paramètre de couleur personnalisé
+        createScatterPlot(
+            '#cluster-map',
+            dataToDisplay,
+            clusters,
+            null, // Pas de couleurs de cluster
+            currentSelection.projection,
+            'suicidal' // Indiquer le mode de couleur
+        );
+    } else if (typeof updateScatterPlot === 'function' && scatterPlot) {
+        // Sinon, utiliser la fonction updateScatterPlot existante
+        updateScatterPlot('#cluster-map', dataToDisplay, clusters, currentSelection.projection, 'suicidal');
+    }
+}
+
+// CAS 1: Transition VERS le mode CLUSTER
+function handleTransitionToClusterMode() {
+    console.log('Transition VERS mode CLUSTER');
+    
+    // Pour le mode CLUSTER, on utilise TOUJOURS TOUTES les données originales
+    // Peu importe d'où on vient
+    
+    // 1. Restaurer toutes les données originales
+    processedData = JSON.parse(JSON.stringify(originalData));
+    
+    // 2. Recréer les clusters avec TOUTES les données
+    const dataForClustering = processedData.map(d => ({...d}));
+    clusters = performClustering(dataForClustering, CONFIG.numClusters);
+    
+    // 3. Mettre à jour les IDs de cluster
+    processedData.forEach((student, index) => {
+        if (dataForClustering[index]) {
+            student.cluster_id = dataForClustering[index].cluster_id;
+        }
+    });
+    
+    // 4. Mettre à jour toutes les visualisations
+    updateAllVisualizationsForClusterMode();
+    
+    console.log('Mode CLUSTER activé avec', processedData.length, 'étudiants');
+}
+
+// CAS 2: Transition DEPUIS le mode CLUSTER
+function handleTransitionFromClusterMode(filteredData) {
+    console.log('Transition DEPUIS mode CLUSTER vers', currentFilterType);
+    
+    // Quand on quitte le mode cluster, on a deux options:
+    // A. Si le filtre est "all" → restaurer l'état original
+    // B. Si c'est un autre filtre → appliquer le filtre sur les données originales
+    
+    if (currentFilterType === 'all') {
+        // A. Retour à l'état original
+        restoreOriginalData();
+    } else {
+        // B. Appliquer le nouveau filtre sur les données originales
+        // Reconstruire les clusters originaux filtrés
+        const filteredClusters = originalClusters.map(clusterArray => 
+            clusterArray.filter(student => 
+                filteredData.some(f => f.id === student.id)
+            )
+        ).filter(cluster => cluster.length > 0);
+        
+        // Mettre à jour les données
+        processedData = filteredData;
+        clusters = filteredClusters;
+        
+        // Ajuster les IDs de cluster
+        adjustClusterIDs();
+        
+        // Mettre à jour les visualisations
+        updateAllVisualizationsForFilterMode();
+    }
+}
+
+// CAS 3: Mode "Tous" (pas de filtre)
+function handleAllFilterMode(filteredData) {
+    console.log('Mode TOUS activé');
+    
+    // Restaurer l'état original complet
+    restoreOriginalData();
+}
+
+// CAS 4: Transition entre filtres normaux
+function handleNormalFilterTransition(filteredData) {
+    console.log('Transition entre filtres normaux vers', currentFilterType);
+    
+    // Pour les transitions entre filtres normaux, on filtre les clusters existants
+    const filteredClusters = clusters.map(clusterArray => 
+        clusterArray.filter(student => 
+            filteredData.some(f => f.id === student.id)
+        )
+    ).filter(cluster => cluster.length > 0);
+    
+    // Si tous les clusters sont vides, restaurer
+    if (filteredClusters.length === 0) {
+        console.warn('Tous les clusters sont vides après filtrage');
+        restoreOriginalData();
+        return;
+    }
+    
+    // Mettre à jour les données et clusters
+    processedData = filteredData;
+    clusters = filteredClusters;
+    
+    // Ajuster les IDs de cluster
+    adjustClusterIDs();
+    
+    // Mettre à jour les visualisations
+    updateAllVisualizationsForFilterMode();
+}
+
+// Restaurer les données originales COMPLÈTES
+// Restaurer les données originales COMPLÈTES
+function restoreOriginalData() {
+    console.log('Restauration des données originales COMPLÈTES');
+    
+    // 1. Restaurer les données
+    processedData = JSON.parse(JSON.stringify(originalData));
+    
+    // 2. Restaurer les clusters
+    clusters = JSON.parse(JSON.stringify(originalClusters));
+    
+    // 3. Mettre à jour toutes les visualisations
+    updateAllVisualizations();
+    
+    // 4. Réinitialiser la sélection
+    selectCluster(0);
+    
+    console.log('Données restaurées:', processedData.length, 'étudiants');
+}
+
+
+// Mettre à jour les autres composants
+// Mettre à jour les autres composants
+function updateOtherComponents() {
+    // Mettre à jour le radar si une sélection existe
+    if (currentSelection.student) {
+        const selectedStudent = processedData.find(d => d.id === currentSelection.student.id);
+        if (selectedStudent) {
+            updateRadarForStudent(selectedStudent);
+        }
+    } else if (currentSelection.cluster !== null && clusters[currentSelection.cluster]) {
+        const clusterData = clusters[currentSelection.cluster];
+        updateRadarForCluster(clusterData);
+        updateClusterStats(clusterData);
+        updateClusterHeatmap(clusterData);
+        updateRiskBadge(clusterData);
+    }
+    
+    // Ajoutez cette vérification pour le mode suicidal
+    if (currentFilterType === 'suicidal') {
+        // Compter les étudiants avec pensées suicidaires
+        const suicidalCount = processedData.filter(d => {
+            const val = d.hasSuicidalThoughts;
+            if (typeof val === 'boolean') return val === true;
+            if (typeof val === 'number') return val === 1;
+            if (typeof val === 'string') {
+                const lowerVal = val.toString().toLowerCase().trim();
+                return (lowerVal === 'true' || lowerVal === 'yes' || lowerVal === '1');
+            }
+            return false;
+        }).length;
+        
+        const suicidalRate = processedData.length > 0 ? 
+            ((suicidalCount / processedData.length) * 100).toFixed(1) : '0.0';
+        
+        console.log(`Mode suicidal: ${suicidalCount}/${processedData.length} étudiants (${suicidalRate}%)`);
+    }
+}
+
+// Mettre à jour toutes les visualisations en mode cluster
+// Mettre à jour toutes les visualisations
+function updateAllVisualizations() {
+    console.log('Mise à jour de toutes les visualisations avec', clusters.length, 'clusters');
+    
+    // A. Scatter plot
+    updateScatterPlotForFilter();
+    
+    // B. KPIs
+    updateKPIs();
+    
+    // C. Légende
+    createClusterLegend();
+    
+    // D. Table des couleurs
+    createColorTable();
+    
+    // E. Sélecteur d'étudiants
+    populateStudentSelector();
+    
+    // F. Adapter la sélection
+    adaptCurrentSelection();
+    
+    // G. Sunburst chart
+    updateSunburstChart();
+    
+    // H. Mettre à jour les autres composants
+    updateOtherComponents();
+}
+
+// Mettre à jour toutes les visualisations en mode filtre
+function updateAllVisualizationsForFilterMode() {
+    console.log('Mise à jour en mode FILTRE avec', clusters.length, 'clusters');
+    
+    // A. Scatter plot
+    updateScatterPlotForFilter();
+    
+    // B. KPIs
+    updateKPIs();
+    
+    // C. Légende
+    createClusterLegend();
+    
+    // D. Table des couleurs
+    createColorTable();
+    
+    // E. Sélecteur d'étudiants
+    populateStudentSelector();
+    
+    // F. Adapter la sélection
+    adaptCurrentSelection();
+    
+    // G. Sunburst chart
+    updateSunburstChart();
+}
+
+// Ajuster les IDs de cluster après filtrage
+// Ajuster les IDs de cluster après filtrage
+function adjustClusterIDs() {
+    const newClusters = clusters.filter(cluster => cluster.length > 0);
+    
+    // Mettre à jour les cluster_id des étudiants
+    newClusters.forEach((cluster, newIndex) => {
+        cluster.forEach(student => {
+            student.cluster_id = newIndex;
+        });
+    });
+    
+    clusters = newClusters;
+}
 // Créer la légende des clusters
 function createClusterLegend() {
     const legendContainer = d3.select('#cluster-legend');
     legendContainer.selectAll('*').remove();
+    
+    if (clusters.length === 0) return;
     
     const legend = legendContainer
         .selectAll('.legend-item')
@@ -230,27 +685,19 @@ function createClusterLegend() {
         .enter()
         .append('div')
         .attr('class', 'legend-item')
-        .classed('active', (d, i) => i === 0);
+        .classed('active', (d, i) => i === currentSelection.cluster);
     
     legend.append('div')
         .attr('class', 'legend-color')
-        .style('background-color', (d, i) => CLUSTER_COLORS[i]);
+        .style('background-color', (d, i) => CLUSTER_COLORS[i % CLUSTER_COLORS.length]);
     
     legend.append('span')
         .text((d, i) => `Cluster ${i + 1} (${d.length} étudiants)`);
     
-    // Événement de clic - CORRIGEZ ICI
+    // Événement de clic
     legend.on('click', function(event, d, i) {
-        console.log('Légende cliquée, index:', i, 'type de i:', typeof i);
-        if (i !== undefined) {
+        if (i !== undefined && clusters[i]) {
             selectCluster(i);
-        } else {
-            // Essayer de trouver l'index autrement
-            const index = Array.from(legendContainer.selectAll('.legend-item').nodes()).indexOf(this);
-            console.log('Index trouvé via DOM:', index);
-            if (index !== -1) {
-                selectCluster(index);
-            }
         }
         d3.selectAll('.legend-item').classed('active', false);
         d3.select(this).classed('active', true);
@@ -258,15 +705,16 @@ function createClusterLegend() {
 }
 
 // Populer le sélecteur d'étudiants
-// Populer le sélecteur d'étudiants
 function populateStudentSelector() {
     const container = d3.select('#student-selector');
     container.selectAll('*').remove();
     
-    // Prendre un échantillon REPRÉSENTATIF (pas juste 1 sur 20)
+    if (processedData.length === 0) return;
+    
+    // Prendre un échantillon représentatif
     const sampleStudents = getRepresentativeStudents();
     
-    console.log('Sélecteur d\'étudiants:', sampleStudents.length, 'étudiants représentatifs');
+    if (sampleStudents.length === 0) return;
     
     const cards = container
         .selectAll('.student-card')
@@ -327,7 +775,7 @@ function populateStudentSelector() {
         // Sélectionner l'étudiant
         selectStudent(d);
         
-        // Mettre à jour le mode de comparaison automatiquement
+        // Mettre à jour le mode de comparaison
         document.getElementById('comparison-mode').value = 'student-vs-cluster';
         
         // Forcer la mise à jour du radar
@@ -340,36 +788,336 @@ function populateStudentSelector() {
     }
 }
 
-// === FONCTIONS MANQUANTES À AJOUTER ===
-
-// 1. Calculer le score de risque d'un étudiant
-function calculateStudentRiskScore(student) {
-    if (!student) return 0;
+// Obtenir des étudiants représentatifs
+function getRepresentativeStudents() {
+    const studentsByCluster = {};
     
-    let score = 0;
+    processedData.forEach(student => {
+        if (!studentsByCluster[student.cluster_id]) {
+            studentsByCluster[student.cluster_id] = [];
+        }
+        studentsByCluster[student.cluster_id].push(student);
+    });
     
-    // Facteurs de risque avec pondérations
-    const riskFactors = {
-        depression: { weight: 30, value: student.depression === 1 ? 1 : 0 },
-        suicidal: { weight: 25, value: student.hasSuicidalThoughts ? 1 : 0 },
-        academic_pressure: { weight: 15, value: (student.academic_pressure || 0) / 5 },
-        sleep_duration: { 
-            weight: 15, 
-            value: student.sleep_duration <= 2 ? 1 : student.sleep_duration <= 3 ? 0.5 : 0 
-        },
-        financial_stress: { weight: 10, value: (student.financial_stress || 0) / 5 },
-        family_history: { weight: 5, value: student.family_history ? 1 : 0 }
-    };
+    const representativeStudents = [];
     
-    // Calculer le score total
-    for (const factor in riskFactors) {
-        score += riskFactors[factor].weight * riskFactors[factor].value;
-    }
+    // Pour chaque cluster, prendre 2 étudiants
+    Object.keys(studentsByCluster).forEach(clusterId => {
+        const clusterStudents = studentsByCluster[clusterId];
+        
+        // Prendre un étudiant déprimé
+        const depressedStudent = clusterStudents.find(s => s.depression === 1);
+        if (depressedStudent) {
+            representativeStudents.push(depressedStudent);
+        }
+        
+        // Prendre un étudiant non déprimé
+        const healthyStudent = clusterStudents.find(s => s.depression === 0);
+        if (healthyStudent) {
+            representativeStudents.push(healthyStudent);
+        }
+        
+        // Si pas assez, ajouter des étudiants aléatoires
+        if (representativeStudents.filter(s => s.cluster_id == clusterId).length < 2) {
+            const randomStudent = clusterStudents[Math.floor(Math.random() * clusterStudents.length)];
+            if (randomStudent && !representativeStudents.includes(randomStudent)) {
+                representativeStudents.push(randomStudent);
+            }
+        }
+    });
     
-    return Math.min(100, Math.round(score));
+    // Limiter à 12 étudiants max
+    return representativeStudents.slice(0, 12);
 }
 
-// 2. Obtenir le niveau de risque
+// Dans votre fichier filters.js ou la fonction setupFilters
+// Dans votre fichier profiling.js, modifiez la fonction setupFilters
+function setupFilters(onFilterChange, allData) {
+    console.log('Initialisation des filtres avec', allData.length, 'données');
+    
+    // Stocker une référence à toutes les données
+    const allOriginalData = allData || [];
+    
+    // Récupérer tous les boutons de filtre
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    
+    // Initialiser l'état des filtres
+    let currentActiveFilter = 'all';
+    
+    // Fonction pour appliquer un filtre (MODIFIÉE)
+    function applyFilter(data, filterType) {
+        if (!data || data.length === 0) return [];
+        
+        switch(filterType) {
+            case 'depression':
+                // FILTRER: seulement les déprimés
+                return data.filter(d => d.depression === 1);
+            case 'suicidal':
+                // NE PAS FILTRER: retourner toutes les données
+                // Le changement de couleur se fera dans le scatter plot
+                return [...data];
+            case 'academic':
+                // FILTRER: pression académique élevée
+                return data.filter(d => d.academic_pressure >= 4);
+            case 'cluster':
+                // Mode cluster: retourner toutes les données
+                return [...data];
+            case 'all':
+            default:
+                // Toutes les données
+                return [...data];
+        }
+    }
+    
+    // Quand un filtre change
+    filterButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const filterType = this.dataset.filter;
+            console.log('Type de filtre sélectionné:', filterType);
+            
+            // Mettre à jour l'interface
+            filterButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+            
+            let filteredData;
+            
+            // IMPORTANT: Pour le mode "suicidal", envoyer TOUTES les données
+            if (filterType === 'suicidal' || filterType === 'cluster' || filterType === 'all') {
+                filteredData = [...allOriginalData]; // TOUTES les données
+            } else {
+                // Pour les autres filtres (dépression, academic), appliquer le filtre
+                filteredData = applyFilter(allOriginalData, filterType);
+            }
+            
+            console.log(`Filtre ${filterType} appliqué: ${filteredData.length}/${allOriginalData.length} étudiants`);
+            
+            // Appeler le callback avec les données filtrées ET le type de filtre
+            onFilterChange(filteredData, filterType);
+            
+            // Mettre à jour l'état
+            currentActiveFilter = filterType;
+        });
+    });
+    
+    // Retourner l'interface de contrôle
+    return {
+        getCurrentFilter: () => currentActiveFilter,
+        applyFilter: (filterType) => {
+            const button = document.querySelector(`.filter-btn[data-filter="${filterType}"]`);
+            if (button) {
+                button.click();
+            }
+        },
+        resetFilters: () => {
+            const allButton = document.querySelector('.filter-btn[data-filter="all"]');
+            if (allButton) {
+                allButton.click();
+            }
+        }
+    };
+}
+
+// Sélectionner le premier cluster disponible
+// Sélectionner le premier cluster disponible
+function selectFirstAvailableCluster() {
+    if (clusters.length > 0 && clusters[0].length > 0) {
+        selectCluster(0);
+    } else {
+        // Trouver le premier cluster non vide
+        const firstNonEmptyIndex = clusters.findIndex(cluster => cluster.length > 0);
+        if (firstNonEmptyIndex !== -1) {
+            selectCluster(firstNonEmptyIndex);
+        } else {
+            console.warn('Aucun cluster non vide trouvé');
+            currentSelection.cluster = null;
+        }
+    }
+}
+// Adapter la sélection courante
+// Adapter la sélection courante
+function adaptCurrentSelection() {
+    // Si un étudiant est sélectionné
+    if (currentSelection.student) {
+        const selectedStudent = processedData.find(d => d.id === currentSelection.student.id);
+        if (selectedStudent) {
+            currentSelection.student = selectedStudent;
+        } else {
+            // L'étudiant n'est plus dans les données filtrées
+            currentSelection.student = null;
+            selectFirstAvailableCluster();
+        }
+    } 
+    // Si un cluster est sélectionné
+    else if (currentSelection.cluster !== null) {
+        if (currentSelection.cluster < clusters.length && 
+            clusters[currentSelection.cluster] && 
+            clusters[currentSelection.cluster].length > 0) {
+            // Le cluster existe toujours
+            // La mise à jour des stats se fera dans updateOtherComponents
+        } else {
+            // Le cluster n'existe plus
+            selectFirstAvailableCluster();
+        }
+    } else {
+        // Aucune sélection, prendre la première disponible
+        selectFirstAvailableCluster();
+    }
+}
+
+// Mettre à jour le scatter plot
+// Mettre à jour le scatter plot
+function updateScatterPlotForFilter() {
+    // Limiter les données pour le scatter plot
+    let dataToDisplay = processedData;
+    if (dataToDisplay.length > 1500) {
+        dataToDisplay = d3.shuffle(dataToDisplay).slice(0, 1500);
+    }
+    
+    if (typeof updateScatterPlot === 'function' && scatterPlot) {
+        updateScatterPlot('#cluster-map', dataToDisplay, clusters, currentSelection.projection, currentColorScheme);
+    } else if (typeof createScatterPlot === 'function') {
+        createScatterPlot(
+            '#cluster-map',
+            dataToDisplay,
+            clusters,
+            CLUSTER_COLORS,
+            currentSelection.projection
+        );
+    }
+}
+
+// Fonction pour exporter le plan d'action
+function exportActionPlan() {
+    try {
+        // Vérifier si un cluster est sélectionné
+        if (currentSelection.cluster === null || !clusters[currentSelection.cluster]) {
+            alert('Veuillez d\'abord sélectionner un cluster pour générer un plan d\'action.');
+            return;
+        }
+        
+        const clusterData = clusters[currentSelection.cluster];
+        if (!clusterData || clusterData.length === 0) {
+            alert('Le cluster sélectionné ne contient pas de données.');
+            return;
+        }
+        
+        // Calculer les statistiques du cluster
+        const clusterStats = {
+            size: clusterData.length,
+            depressionRate: (clusterData.filter(d => d.depression === 1).length / clusterData.length * 100).toFixed(1),
+            suicidalRate: (clusterData.filter(d => d.hasSuicidalThoughts === true).length / clusterData.length * 100).toFixed(1),
+            avgAge: d3.mean(clusterData, d => d.age).toFixed(1),
+            avgCGPA: d3.mean(clusterData, d => d.cgpa).toFixed(2),
+            avgAcademicPressure: d3.mean(clusterData, d => d.academic_pressure).toFixed(2),
+            avgSleep: d3.mean(clusterData, d => d.sleep_duration).toFixed(1)
+        };
+        
+        // Déterminer le niveau de risque
+        let riskLevel = 'Faible';
+        if (clusterStats.depressionRate > 40) riskLevel = 'Élevé';
+        else if (clusterStats.depressionRate > 20) riskLevel = 'Moyen';
+        
+        // Identifier les facteurs de risque principaux
+        const riskFactors = calculateRiskFactors().slice(0, 3);
+        
+        // Générer le contenu du plan d'action
+        const actionPlan = `
+PLAN D'ACTION - CLUSTER ${currentSelection.cluster + 1}
+===============================================
+
+📊 STATISTIQUES DU CLUSTER
+--------------------------
+• Nombre d'étudiants : ${clusterStats.size}
+• Taux de dépression : ${clusterStats.depressionRate}%
+• Taux de pensées suicidaires : ${clusterStats.suicidalRate}%
+• Âge moyen : ${clusterStats.avgAge} ans
+• CGPA moyen : ${clusterStats.avgCGPA}/10
+• Niveau de risque : ${riskLevel}
+
+🎯 FACTEURS DE RISQUE PRINCIPAUX
+--------------------------------
+${riskFactors.map((factor, i) => `${i + 1}. ${factor.name} (corrélation: ${factor.correlation.toFixed(2)})`).join('\n')}
+
+💡 RECOMMANDATIONS
+------------------
+1. Interventions priorisées :
+   - ${riskLevel === 'Élevé' ? 'Intervention immédiate recommandée' : riskLevel === 'Moyen' ? 'Suivi rapproché nécessaire' : 'Surveillance régulière'}
+   - Session de sensibilisation à la santé mentale
+   - Accès facilité aux services de soutien
+
+2. Actions académiques :
+   - Adaptation des charges de travail
+   - Tutorat par les pairs
+   - Flexibilité dans les échéances
+
+3. Support psychologique :
+   - ${clusterStats.suicidalRate > 10 ? 'Référencement systématique au service de santé' : 'Consultations disponibles sur demande'}
+   - Groupes de soutien par les pairs
+   - Formation des enseignants à la détection
+
+📈 INDICATEURS DE SUIVI
+-----------------------
+• Réduction du taux de dépression de 20% en 6 mois
+• Augmentation de la satisfaction académique de 15%
+• Amélioration de la durée moyenne de sommeil de 1 heure
+• 100% des étudiants à risque orientés vers un soutien
+
+🕐 DATE DE GÉNÉRATION : ${new Date().toLocaleDateString('fr-FR')}
+👥 RESPONSABLE : Service de santé universitaire
+
+---
+Ce plan est généré automatiquement et doit être personnalisé
+en fonction du contexte spécifique de votre établissement.
+        `;
+        
+        // Créer et télécharger le fichier
+        const blob = new Blob([actionPlan], { type: 'text/plain;charset=utf-8' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `plan-action-cluster-${currentSelection.cluster + 1}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        console.log('Plan d\'action exporté pour le cluster', currentSelection.cluster + 1);
+        
+    } catch (error) {
+        console.error('Erreur lors de l\'export du plan d\'action:', error);
+        alert('Erreur lors de l\'export du plan d\'action. Voir la console pour plus de détails.');
+    }
+}
+
+// Mettre à jour le sunburst chart
+// Mettre à jour le sunburst chart
+function updateSunburstChart() {
+    try {
+        if (typeof createSunburstChart === 'function') {
+            createSunburstChart('#bubble-chart-container', processedData, clusters);
+        }
+    } catch (error) {
+        console.error('Erreur dans la mise à jour du sunburst:', error);
+    }
+}
+// ==================== FONCTIONS EXISTANTES (gardées telles quelles) ====================
+
+// Calculer un score de risque pour un étudiant
+function calculateStudentRiskScore(student) {
+    let score = 0;
+    
+    // Facteurs de risque
+    if (student.depression === 1) score += 30;
+    if (student.hasSuicidalThoughts) score += 25;
+    if (student.academic_pressure >= 4) score += 15;
+    if (student.sleep_duration <= 2) score += 15;
+    if (student.financial_stress >= 4) score += 10;
+    if (student.family_history) score += 5;
+    
+    return Math.min(100, score);
+}
+
+// Obtenir le niveau de risque
 function getRiskLevel(score) {
     if (score >= 60) {
         return { label: 'Risque Élevé', color: '#dc2626' };
@@ -380,16 +1128,12 @@ function getRiskLevel(score) {
     }
 }
 
-// 3. Sélectionner un étudiant (version simplifiée)
+// Sélectionner un étudiant
 function selectStudent(student) {
-    console.log(' Sélection de l\'étudiant #' + student.id);
+    console.log('Sélection de l\'étudiant #' + student.id);
     
-    if (!student) {
-        console.error('Aucun étudiant fourni');
-        return;
-    }
+    if (!student) return;
     
-    // Mettre à jour la sélection globale
     currentSelection.student = student;
     currentSelection.cluster = student.cluster_id;
     
@@ -397,39 +1141,37 @@ function selectStudent(student) {
     updateDisplayForStudent(student);
 }
 
-// 4. Mettre à jour l'affichage pour un étudiant
+// Mettre à jour l'affichage pour un étudiant
 function updateDisplayForStudent(student) {
-    // A. Mettre à jour l'ID du cluster
+    // Mettre à jour l'ID du cluster
     const clusterIdEl = document.getElementById('current-cluster-id');
     if (clusterIdEl) {
         clusterIdEl.textContent = (student.cluster_id + 1).toString();
     }
     
-    // B. Obtenir les données du cluster
+    // Obtenir les données du cluster
     const clusterData = clusters[student.cluster_id] || [];
     
-    // C. Mettre à jour les statistiques du cluster
+    // Mettre à jour les statistiques du cluster
     updateClusterStats(clusterData);
     
-    // D. Mettre à jour le badge de risque
+    // Mettre à jour le badge de risque
     updateRiskBadge(clusterData);
     
-    // E. Mettre à jour le heatmap
+    // Mettre à jour le heatmap
     updateClusterHeatmap(clusterData);
     
-    // F. Afficher le résumé de l'étudiant
+    // Afficher le résumé de l'étudiant
     showStudentSummary(student, clusterData);
     
-    // G. Mettre à jour les autres visualisations
+    // Mettre à jour les autres visualisations
     updateBubbleChart();
-    
     
     console.log('Affichage mis à jour pour l\'étudiant #' + student.id);
 }
 
-// 5. Afficher le résumé de l'étudiant
+// Afficher le résumé de l'étudiant
 function showStudentSummary(student, clusterData) {
-    // Créer ou trouver le conteneur
     let summaryContainer = document.getElementById('student-summary-container');
     
     if (!summaryContainer) {
@@ -437,7 +1179,6 @@ function showStudentSummary(student, clusterData) {
         summaryContainer.id = 'student-summary-container';
         summaryContainer.className = 'student-summary';
         
-        // Insérer après le sélecteur
         const selector = document.getElementById('student-selector');
         if (selector && selector.parentNode) {
             selector.parentNode.insertBefore(summaryContainer, selector.nextSibling);
@@ -516,129 +1257,22 @@ function showStudentSummary(student, clusterData) {
     `;
 }
 
-// 6. Mettre à jour le radar pour un étudiant
-function updateRadarForStudent(student) {
-    console.log('Mise à jour du radar pour étudiant #' + student.id);
-    
-    // Vérifier si le radar est initialisé
-    if (!radarChartInstance) {
-        console.warn('Radar chart non initialisé');
-        return;
-    }
-    
-    // Obtenir les données du cluster
-    const clusterData = clusters[student.cluster_id] || [];
-    
-    // Calculer les moyennes du cluster
-    const clusterMeans = {};
-    CONFIG.featureKeys.forEach(key => {
-        const values = clusterData.map(d => d[key] || 0);
-        clusterMeans[key] = d3.mean(values) || 0;
-    });
-    
-    // Mettre à jour le radar
-    updateRadarChart(
-        '#profile-radar',
-        student,               // Données étudiant
-        clusterMeans,          // Moyennes du cluster
-        CONFIG.featureKeys,    // Features à afficher
-        `Étudiant #${student.id} vs Cluster ${student.cluster_id + 1}` // Titre
-    );
-    
-    console.log('Radar mis à jour');
-}
-
-
-
-// Obtenir des étudiants représentatifs
-function getRepresentativeStudents() {
-    // Prendre 2 étudiants de chaque cluster
-    const studentsByCluster = {};
-    
-    processedData.forEach(student => {
-        if (!studentsByCluster[student.cluster_id]) {
-            studentsByCluster[student.cluster_id] = [];
-        }
-        studentsByCluster[student.cluster_id].push(student);
-    });
-    
-    const representativeStudents = [];
-    
-    // Pour chaque cluster, prendre 2 étudiants (1 déprimé, 1 non déprimé si possible)
-    Object.keys(studentsByCluster).forEach(clusterId => {
-        const clusterStudents = studentsByCluster[clusterId];
-        
-        // Prendre un étudiant déprimé
-        const depressedStudent = clusterStudents.find(s => s.depression === 1);
-        if (depressedStudent) {
-            representativeStudents.push(depressedStudent);
-        }
-        
-        // Prendre un étudiant non déprimé
-        const healthyStudent = clusterStudents.find(s => s.depression === 0);
-        if (healthyStudent) {
-            representativeStudents.push(healthyStudent);
-        }
-        
-        // Si pas assez, ajouter des étudiants aléatoires
-        if (representativeStudents.filter(s => s.cluster_id == clusterId).length < 2) {
-            const randomStudent = clusterStudents[Math.floor(Math.random() * clusterStudents.length)];
-            if (randomStudent && !representativeStudents.includes(randomStudent)) {
-                representativeStudents.push(randomStudent);
-            }
-        }
-    });
-    
-    // Limiter à 12 étudiants max
-    return representativeStudents.slice(0, 12);
-}
-
-// Calculer un score de risque pour un étudiant
-function calculateStudentRiskScore(student) {
-    let score = 0;
-    
-    // Facteurs de risque
-    if (student.depression === 1) score += 30;
-    if (student.hasSuicidalThoughts) score += 25;
-    if (student.academic_pressure >= 4) score += 15;
-    if (student.sleep_duration <= 2) score += 15;
-    if (student.financial_stress >= 4) score += 10;
-    if (student.family_history) score += 5;
-    
-    return Math.min(100, score);
-}
-
-// Obtenir le niveau de risque
-function getRiskLevel(score) {
-    if (score >= 60) {
-        return { label: 'Risque Élevé', color: '#dc2626' };
-    } else if (score >= 30) {
-        return { label: 'Risque Moyen', color: '#f59e0b' };
-    } else {
-        return { label: 'Faible Risque', color: '#16a34a' };
-    }
-}
-
-
 // Sélectionner un cluster
 function selectCluster(clusterIndex) {
-    // VALIDATION IMPORTANTE
     if (clusterIndex === undefined || clusterIndex === null) {
         console.error('ClusterIndex est undefined!', clusterIndex);
-        console.trace(); // Voir d'où vient l'appel
         return;
     }
     
-    // Convertir en nombre si c'est une chaîne
     clusterIndex = parseInt(clusterIndex);
     
     // Vérifier les limites
     if (clusterIndex < 0 || clusterIndex >= clusters.length) {
         console.warn(`Index de cluster invalide: ${clusterIndex}. Doit être entre 0 et ${clusters.length - 1}`);
-        clusterIndex = 0; // Revenir au cluster par défaut
+        clusterIndex = 0;
     }
     
-    console.log('Sélection du cluster:', clusterIndex, 'type:', typeof clusterIndex);
+    console.log('Sélection du cluster:', clusterIndex);
     
     currentSelection.cluster = clusterIndex;
     currentSelection.student = null;
@@ -646,15 +1280,7 @@ function selectCluster(clusterIndex) {
     // Mettre à jour l'affichage
     document.getElementById('current-cluster-id').textContent = clusterIndex + 1;
     
-    // Prendre directement les données du tableau clusters
     const clusterData = clusters[clusterIndex] || [];
-    console.log('Données du cluster:', clusterData.length, 'étudiants');
-    
-    if (clusterData.length === 0) {
-        console.warn('Cluster vide à l\'index', clusterIndex);
-        console.log('Taille de clusters:', clusters.length);
-        console.log('Clusters disponibles:', clusters.map((c, i) => `[${i}]: ${c.length}`));
-    }
     
     // Calculer les statistiques du cluster
     updateClusterStats(clusterData);
@@ -668,105 +1294,65 @@ function selectCluster(clusterIndex) {
     // Mettre à jour les small multiples
     updateBubbleChart();
     
-    // Mettre à jour les outliers
-     //updateOutliers();
-    
     // Mettre à jour le badge de risque
     updateRiskBadge(clusterData);
+    
+    // Mettre à jour la légende
+    updateLegendSelection(clusterIndex);
 }
 
-
+// Mettre à jour la sélection dans la légende
+function updateLegendSelection(clusterIndex) {
+    d3.selectAll('.legend-item')
+        .classed('active', (d, i) => i === clusterIndex);
+}
 
 // Mettre à jour les statistiques du cluster
-// Mettre à jour les statistiques du cluster - VERSION ULTIME
 function updateClusterStats(clusterData) {
     const container = d3.select('#cluster-stats');
     container.selectAll('*').remove();
     
-    // Fonction helper pour calculer les moyennes en toute sécurité
+    if (!clusterData || clusterData.length === 0) {
+        container.html('<div class="no-data">Aucune donnée disponible</div>');
+        return;
+    }
+    
     const safeMean = (data, key) => {
         if (!data || data.length === 0) return 0;
         const values = data.map(d => d[key]).filter(v => v !== undefined && v !== null);
         return values.length > 0 ? d3.mean(values) : 0;
     };
     
-    // DEBUG: Afficher les 3 premiers étudiants du cluster
-    console.log('=== DEBUG CLUSTER DATA ===');
-    if (clusterData.length > 0) {
-        clusterData.slice(0, 3).forEach((student, i) => {
-            console.log(`Student ${i+1}: ID=${student.id}, suicidal="${student.hasSuicidalThoughts}", type=${typeof student.hasSuicidalThoughts}`);
-        });
-    }
-    
-    // Fonction de comptage robuste POUR LES PENSÉES SUICIDAIRES
-    const countSuicidalThoughts = (data) => {
-        if (!data || data.length === 0) return 0;
-        
-        let count = 0;
-        data.forEach((student, index) => {
-            const val = student.hasSuicidalThoughts;
-            
-            // DEBUG détaillé pour les 5 premiers
-            if (index < 5) {
-                console.log(`  [${index}] ID ${student.id}: suicidal = "${val}" (${typeof val})`);
-            }
-            
-            if (val === undefined || val === null) return;
-            
-            let isSuicidal = false;
-            
-            // Vérifier selon le type
-            if (typeof val === 'boolean') {
-                isSuicidal = val === true;
-            } else if (typeof val === 'number') {
-                isSuicidal = val === 1;
-            } else if (typeof val === 'string') {
-                const lowerVal = val.toString().toLowerCase().trim();
-                // CORRECTION IMPORTANTE: "false" en chaîne doit retourner false
-                // "true" en chaîne doit retourner true
-                isSuicidal = (lowerVal === 'true' || 
-                             lowerVal === 'yes' || 
-                             lowerVal === '1' || 
-                             lowerVal === 'oui' ||
-                             lowerVal === 'y');
-            }
-            
-            if (isSuicidal) {
-                count++;
-                if (index < 5) {
-                    console.log(`    → COMPTÉ comme suicidaire`);
-                }
-            }
-        });
-        
-        console.log(`Total suicidal in cluster: ${count}/${data.length}`);
-        return count;
-    };
-    
-    // Fonction pour compter la dépression
     const countDepression = (data) => {
         if (!data || data.length === 0) return 0;
-        
         return data.filter(d => {
             const val = d.depression;
             if (typeof val === 'number') return val === 1;
-            if (typeof val === 'string') return val.toString().trim() === '1' || val.toLowerCase().trim() === 'yes';
+            if (typeof val === 'string') return val.toString().trim() === '1';
+            return false;
+        }).length;
+    };
+    
+    const countSuicidal = (data) => {
+        if (!data || data.length === 0) return 0;
+        return data.filter(d => {
+            const val = d.hasSuicidalThoughts;
             if (typeof val === 'boolean') return val === true;
+            if (typeof val === 'number') return val === 1;
+            if (typeof val === 'string') {
+                const lowerVal = val.toString().toLowerCase().trim();
+                return (lowerVal === 'true' || lowerVal === 'yes' || lowerVal === '1');
+            }
             return false;
         }).length;
     };
     
     const clusterSize = clusterData.length;
     const depressionCount = countDepression(clusterData);
-    const suicidalCount = countSuicidalThoughts(clusterData);
+    const suicidalCount = countSuicidal(clusterData);
     
     const depressionRate = clusterSize > 0 ? (depressionCount / clusterSize * 100) : 0;
     const suicidalRate = clusterSize > 0 ? (suicidalCount / clusterSize * 100) : 0;
-    
-    console.log('=== RÉSULTATS CLUSTER ===');
-    console.log(`Taille: ${clusterSize}`);
-    console.log(`Dépression: ${depressionCount} (${depressionRate.toFixed(1)}%)`);
-    console.log(`Suicidaire: ${suicidalCount} (${suicidalRate.toFixed(1)}%)`);
     
     const stats = [
         {
@@ -779,7 +1365,11 @@ function updateClusterStats(clusterData) {
             value: depressionRate.toFixed(1),
             unit: '%'
         },
-       
+        {
+            label: 'Taux de Pensées Suicidaires',
+            value: suicidalRate.toFixed(1),
+            unit: '%'
+        },
         {
             label: 'Âge Moyen',
             value: safeMean(clusterData, 'age').toFixed(1),
@@ -815,140 +1405,63 @@ function updateClusterStats(clusterData) {
 
 // Mettre à jour la heatmap du cluster
 function updateClusterHeatmap(clusterData) {
-    // Extraire les données pour la heatmap
+    if (!clusterData || clusterData.length === 0) return;
+    
     const heatmapData = CONFIG.featureKeys.map(key => {
         return CONFIG.featureKeys.map(otherKey => {
-            const values1 = clusterData.map(d => d[key]);
-            const values2 = clusterData.map(d => d[otherKey]);
+            const values1 = clusterData.map(d => d[key] || 0);
+            const values2 = clusterData.map(d => d[otherKey] || 0);
             return calculateCorrelation(values1, values2);
         });
     });
     
-    createCorrelationHeatmap('#cluster-heatmap', heatmapData, CONFIG.features);
+    if (typeof createCorrelationHeatmap === 'function') {
+        createCorrelationHeatmap('#cluster-heatmap', heatmapData, CONFIG.features);
+    }
 }
 
 // Mettre à jour le radar chart pour un cluster
 function updateRadarForCluster(clusterData) {
-    // Calculer les moyennes du cluster
+    if (!clusterData || clusterData.length === 0) return;
+    
     const clusterMeans = {};
     CONFIG.featureKeys.forEach(key => {
-        clusterMeans[key] = d3.mean(clusterData, d => d[key]);
+        clusterMeans[key] = d3.mean(clusterData, d => d[key] || 0) || 0;
     });
     
-    // Calculer les moyennes globales
     const globalMeans = {};
     CONFIG.featureKeys.forEach(key => {
-        globalMeans[key] = d3.mean(processedData, d => d[key]);
+        globalMeans[key] = d3.mean(processedData, d => d[key] || 0) || 0;
     });
     
-    updateRadarChart('#profile-radar', clusterMeans, globalMeans, CONFIG.features, 'Cluster vs Global');
+    if (typeof updateRadarChart === 'function') {
+        updateRadarChart('#profile-radar', clusterMeans, globalMeans, CONFIG.features, 'Cluster vs Global');
+    }
 }
 
 // Mettre à jour le radar chart pour un étudiant
 function updateRadarForStudent(student) {
-    console.log('Mise à jour du radar pour étudiant', student);
-    
-    // Vérifier les données de l'étudiant
-    console.log('Données étudiant disponibles:', {
-        academic_pressure: student.academic_pressure,
-        study_satisfaction: student.study_satisfaction,
-        sleep_duration: student.sleep_duration,
-        financial_stress: student.financial_stress,
-        dietary_habits: student.dietary_habits,
-        work_study_hours: student.work_study_hours,
-        cgpa: student.cgpa
-    });
-    
-    // Obtenir les données du cluster
     const clusterData = clusters[student.cluster_id] || [];
     
-    // Calculer les moyennes du cluster
     const clusterMeans = {};
     CONFIG.featureKeys.forEach(key => {
         const values = clusterData.map(d => d[key] || 0);
         clusterMeans[key] = d3.mean(values) || 0;
     });
     
-    console.log('Moyennes cluster:', clusterMeans);
-    
-    // Utiliser CONFIG.features (noms d'affichage) au lieu de CONFIG.featureKeys
-    updateRadarChart(
-        '#profile-radar',
-        student,               // Données étudiant
-        clusterMeans,          // Moyennes du cluster
-        CONFIG.features,       // Noms d'affichage (pas les clés techniques)
-        `Étudiant #${student.id} vs Cluster ${student.cluster_id + 1}`
-    );
+    if (typeof updateRadarChart === 'function') {
+        updateRadarChart(
+            '#profile-radar',
+            student,
+            clusterMeans,
+            CONFIG.features,
+            `Étudiant #${student.id} vs Cluster ${student.cluster_id + 1}`
+        );
+    }
 }
 
-function calculateBubbleChartStats(clusters, sizeMetric = 'size') {
-    if (!clusters || clusters.length === 0) {
-        console.warn('Aucun cluster disponible pour calculer les statistiques');
-        return [];
-    }
-    
-    return clusters.map((cluster, id) => {
-        if (!cluster || cluster.length === 0) {
-            return {
-                id: id,
-                size: 10, // Taille minimale
-                depressionRate: 0,
-                avgAge: 0,
-                avgCGPA: 0,
-                avgSleep: 0,
-                avgAcademic: 0,
-                avgFinancial: 0,
-                riskLevel: 'low'
-            };
-        }
-        
-        // Calculer les moyennes
-        const size = cluster.length;
-        const depressionRate = (cluster.filter(d => d.depression === 1).length / size) * 100;
-        const avgAge = d3.mean(cluster, d => d.age) || 0;
-        const avgCGPA = d3.mean(cluster, d => d.cgpa) || 0;
-        const avgSleep = d3.mean(cluster, d => d.sleep_duration) || 0;
-        const avgAcademic = d3.mean(cluster, d => d.academic_pressure) || 0;
-        const avgFinancial = d3.mean(cluster, d => d.financial_stress) || 0;
-        
-        // Déterminer le niveau de risque
-        let riskLevel = 'low';
-        if (depressionRate > 40) riskLevel = 'high';
-        else if (depressionRate > 20) riskLevel = 'medium';
-        
-        // Calculer la taille selon la métrique choisie
-        let bubbleSize = size; // Par défaut: taille du cluster
-        
-        if (sizeMetric === 'depression') {
-            bubbleSize = depressionRate * 2; // Multiplier pour mieux visualiser
-        } else if (sizeMetric === 'academic') {
-            bubbleSize = avgAcademic * 20; // 1-5 scale -> 20-100
-        } else if (sizeMetric === 'financial') {
-            bubbleSize = avgFinancial * 20; // 1-5 scale -> 20-100
-        }
-        
-        // S'assurer que la taille n'est pas trop petite
-        bubbleSize = Math.max(20, bubbleSize);
-        
-        return {
-            id: id,
-            size: bubbleSize,
-            originalSize: size, // Garder la taille originale
-            depressionRate: depressionRate,
-            avgAge: avgAge,
-            avgCGPA: avgCGPA,
-            avgSleep: avgSleep,
-            avgAcademic: avgAcademic,
-            avgFinancial: avgFinancial,
-            riskLevel: riskLevel
-        };
-    });
-}
 // Mettre à jour les small multiples
 function updateBubbleChart() {
-    console.log('Mise à jour du bubble chart...');
-    
-    // Vérifier si les éléments existent
     const sizeByElement = document.getElementById('bubble-size');
     const colorByElement = document.getElementById('bubble-color');
     
@@ -960,43 +1473,98 @@ function updateBubbleChart() {
     const sizeBy = sizeByElement.value;
     const colorBy = colorByElement.value;
     
-    console.log('Options sélectionnées - Taille:', sizeBy, 'Couleur:', colorBy);
-    
-    // Recalculer les stats avec les nouvelles options
     const clusterStats = calculateBubbleChartStats(clusters, sizeBy);
-    
-    // Mettre à jour le graphique
     updateBubbleVisualization(clusterStats, sizeBy, colorBy);
 }
 
 // Fonction pour mettre à jour la visualisation du bubble chart
 function updateBubbleVisualization(clusterStats, sizeBy, colorBy) {
-    console.log('Mise à jour de la visualisation bubble avec:', clusterStats.length, 'clusters');
-    
     const container = document.getElementById('bubble-chart-container');
     if (!container) {
         console.error('Conteneur bubble chart non trouvé');
         return;
     }
     
-    // Vérifier si createBubbleChart accepte les nouveaux paramètres
     try {
-    if (typeof createSunburstChart === 'function') {
-        createSunburstChart('#bubble-chart-container', processedData, clusters);
-    } else {
-        console.warn('createSunburstChart non disponible');
+        if (typeof createSunburstChart === 'function') {
+            createSunburstChart('#bubble-chart-container', processedData, clusters);
+        } else {
+            console.warn('createSunburstChart non disponible');
+        }
+    } catch (error) {
+        console.error('Erreur dans sunburst chart:', error);
     }
-} catch (error) {
-    console.error('Erreur dans sunburst chart:', error);
-}
 }
 
-
+// Calculer les statistiques pour le bubble chart
+function calculateBubbleChartStats(clusters, sizeMetric = 'size') {
+    if (!clusters || clusters.length === 0) {
+        console.warn('Aucun cluster disponible pour calculer les statistiques');
+        return [];
+    }
+    
+    return clusters.map((cluster, id) => {
+        if (!cluster || cluster.length === 0) {
+            return {
+                id: id,
+                size: 10,
+                depressionRate: 0,
+                avgAge: 0,
+                avgCGPA: 0,
+                avgSleep: 0,
+                avgAcademic: 0,
+                avgFinancial: 0,
+                riskLevel: 'low'
+            };
+        }
+        
+        const size = cluster.length;
+        const depressionRate = (cluster.filter(d => d.depression === 1).length / size) * 100;
+        const avgAge = d3.mean(cluster, d => d.age) || 0;
+        const avgCGPA = d3.mean(cluster, d => d.cgpa) || 0;
+        const avgSleep = d3.mean(cluster, d => d.sleep_duration) || 0;
+        const avgAcademic = d3.mean(cluster, d => d.academic_pressure) || 0;
+        const avgFinancial = d3.mean(cluster, d => d.financial_stress) || 0;
+        
+        let riskLevel = 'low';
+        if (depressionRate > 40) riskLevel = 'high';
+        else if (depressionRate > 20) riskLevel = 'medium';
+        
+        let bubbleSize = size;
+        
+        if (sizeMetric === 'depression') {
+            bubbleSize = depressionRate * 2;
+        } else if (sizeMetric === 'academic') {
+            bubbleSize = avgAcademic * 20;
+        } else if (sizeMetric === 'financial') {
+            bubbleSize = avgFinancial * 20;
+        }
+        
+        bubbleSize = Math.max(20, bubbleSize);
+        
+        return {
+            id: id,
+            size: bubbleSize,
+            originalSize: size,
+            depressionRate: depressionRate,
+            avgAge: avgAge,
+            avgCGPA: avgCGPA,
+            avgSleep: avgSleep,
+            avgAcademic: avgAcademic,
+            avgFinancial: avgFinancial,
+            riskLevel: riskLevel
+        };
+    });
+}
 
 // Mettre à jour le badge de risque
 function updateRiskBadge(clusterData) {
+    if (!clusterData || clusterData.length === 0) return;
+    
     const depressionRate = clusterData.filter(d => d.depression === 1).length / clusterData.length;
     const badge = document.getElementById('cluster-risk-badge');
+    
+    if (!badge) return;
     
     badge.className = 'cluster-risk-badge';
     
@@ -1017,8 +1585,8 @@ function calculateRiskFactors() {
     const factors = CONFIG.features.map((name, index) => {
         const key = CONFIG.featureKeys[index];
         const correlation = calculateCorrelation(
-            processedData.map(d => d[key]),
-            processedData.map(d => d.depression)
+            processedData.map(d => d[key] || 0),
+            processedData.map(d => d.depression || 0)
         );
         return {
             name: name,
@@ -1045,136 +1613,38 @@ function calculateCorrelation(x, y) {
     return denominator === 0 ? 0 : numerator / denominator;
 }
 
-// Gérer les changements de filtres
-// Gérer les changements de filtres - VERSION COMPLÈTE
-function handleFilterChange(filteredData) {
-    console.log('Filtres appliqués, données filtrées:', filteredData.length);
-    
-    if (!filteredData || filteredData.length === 0) {
-        console.warn('Aucune donnée après filtrage');
-        // Vous pouvez afficher un message ou réinitialiser
-        return;
-    }
-    
-    // 1. Réappliquer le clustering sur les données filtrées
-    try {
-        clusters = performClustering(filteredData, CONFIG.numClusters);
-        console.log('Clusters recalculés:', clusters.length);
-    } catch (error) {
-        console.error('Erreur lors du clustering:', error);
-        // Si le clustering échoue, utiliser les clusters existants avec filtres
-        clusters = clusters.map(cluster => 
-            cluster.filter(student => 
-                filteredData.some(f => f.id === student.id)
-            )
-        ).filter(cluster => cluster.length > 0);
-    }
-    
-    // 2. Mettre à jour les données traitées avec les données filtrées
-    processedData = filteredData;
-    
-    // 3. Mettre à jour toutes les visualisations
-    
-    // A. Scatter plot
-    if (typeof updateScatterPlot === 'function' && scatterPlot) {
-        updateScatterPlot('#cluster-map', filteredData, clusters, currentSelection.projection, currentColorScheme);
-    } else if (typeof createScatterPlot === 'function') {
-        createScatterPlot(
-            '#cluster-map',
-            filteredData,
-            clusters,
-            CLUSTER_COLORS,
-            currentSelection.projection
-        );
-    }
-    
-    // B. KPIs
-    updateKPIs();
-    
-    // C. Légende
-    createClusterLegend();
-    
-    // D. Table des couleurs
-    createColorTable();
-    
-    // E. Sélecteur d'étudiants
-    populateStudentSelector();
-    
-    // F. Radar chart
-    if (currentSelection.student) {
-        // Si un étudiant est sélectionné, vérifier s'il est toujours dans les données filtrées
-        const selectedStudent = filteredData.find(d => d.id === currentSelection.student.id);
-        if (selectedStudent) {
-            currentSelection.student = selectedStudent;
-            updateRadarForStudent(selectedStudent);
-        } else {
-            // Sinon, sélectionner le cluster
-            currentSelection.student = null;
-            if (currentSelection.cluster !== null && clusters[currentSelection.cluster]) {
-                const clusterData = clusters[currentSelection.cluster] || [];
-                updateRadarForCluster(clusterData);
-            } else {
-                selectCluster(0);
-            }
-        }
-    } else if (currentSelection.cluster !== null) {
-        // Si un cluster est sélectionné
-        if (clusters[currentSelection.cluster] && clusters[currentSelection.cluster].length > 0) {
-            const clusterData = clusters[currentSelection.cluster];
-            updateRadarForCluster(clusterData);
-            updateClusterStats(clusterData);
-            updateClusterHeatmap(clusterData);
-            updateRiskBadge(clusterData);
-        } else {
-            selectCluster(0);
-        }
-    } else {
-        // Par défaut, sélectionner le premier cluster
-        selectCluster(0);
-    }
-    
-    // G. Sunburst chart
-    try {
-        if (typeof createSunburstChart === 'function') {
-            createSunburstChart('#bubble-chart-container', filteredData, clusters);
-        }
-    } catch (error) {
-        console.error('Erreur dans la mise à jour du sunburst:', error);
-    }
-    
-    // H. Heatmap (si un cluster est sélectionné)
-    if (currentSelection.cluster !== null && clusters[currentSelection.cluster]) {
-        const clusterData = clusters[currentSelection.cluster];
-        updateClusterHeatmap(clusterData);
-    }
-    
-    console.log('Toutes les visualisations mises à jour avec les filtres');
-}
-
+// Initialiser les événements
 // Initialiser les événements
 function initializeEventListeners() {
     // Changement de type de projection
     d3.select('#projection-type').on('change', function() {
         currentSelection.projection = this.value;
-        updateScatterPlot('#cluster-map', processedData, clusters, currentSelection.projection, currentColorScheme);
+        
+        let dataToDisplay = processedData;
+        if (dataToDisplay.length > 1500) {
+            dataToDisplay = d3.shuffle(dataToDisplay).slice(0, 1500);
+        }
+        
+        if (typeof updateScatterPlot === 'function') {
+            updateScatterPlot('#cluster-map', dataToDisplay, clusters, currentSelection.projection, currentColorScheme);
+        }
     });
     
     // Changement de schéma de couleurs
     d3.select('#color-scheme').on('change', function() {
         currentColorScheme = this.value;
-        updateScatterPlot('#cluster-map', processedData, clusters, currentSelection.projection, currentColorScheme);
-    });
-    
-    // Bouton 3D
-    d3.select('#toggle-3d').on('click', function() {
-        // Implémenter la vue 3D (avec Three.js si nécessaire)
-        console.log('Basculer en vue 3D');
-    });
-    
-    // Réinitialiser le zoom
-    d3.select('#reset-zoom').on('click', function() {
-        // Réinitialiser le zoom du scatter plot
-        console.log('Réinitialiser le zoom');
+        
+        let dataToDisplay = processedData;
+        if (dataToDisplay.length > 1500) {
+            dataToDisplay = d3.shuffle(dataToDisplay).slice(0, 1500);
+        }
+        
+        if (typeof updateScatterPlot === 'function') {
+            updateScatterPlot('#cluster-map', dataToDisplay, clusters, currentSelection.projection, currentColorScheme);
+        }
+        
+        // Mettre à jour la table des couleurs
+        updateActiveColorCard(this.value);
     });
     
     // Mode de comparaison radar
@@ -1183,7 +1653,7 @@ function initializeEventListeners() {
         if (currentSelection.student) {
             updateRadarForStudent(currentSelection.student);
         } else if (currentSelection.cluster !== null) {
-            const clusterData = processedData.filter(d => d.cluster_id === currentSelection.cluster);
+            const clusterData = clusters[currentSelection.cluster] || [];
             updateRadarForCluster(clusterData);
         }
     });
@@ -1193,544 +1663,281 @@ function initializeEventListeners() {
         updateBubbleChart();
     });
     
-    // Métrique d'outliers
-    d3.select('#outlier-metric').on('change', function() {
-        //updateOutliers();
-    });
-    
-    // Voir les recommandations
-    d3.select('#show-recommendations').on('click', function() {
-        showRecommendations();
-    });
-    
-    // Fermer le modal
-    d3.select('.close-modal').on('click', function() {
-        document.getElementById('recommendations-modal').style.display = 'none';
-    });
-    
     // Exporter les graphiques
     d3.select('#exportMapSVG').on('click', () => exportChart('cluster-map', 'svg', 'carte-clusters.svg'));
     d3.select('#exportMapPNG').on('click', () => exportChart('cluster-map', 'png', 'carte-clusters.png'));
     d3.select('#exportRadarSVG').on('click', () => exportChart('profile-radar', 'svg', 'radar-profil.svg'));
     d3.select('#exportRadarPNG').on('click', () => exportChart('profile-radar', 'png', 'radar-profil.png'));
     
-    // Exporter le plan
+    // Exporter le plan - AJOUTEZ CETTE LIGNE
     d3.select('#export-plan').on('click', exportActionPlan);
 }
 
-// Afficher les recommandations
-function showRecommendations() {
-    if (currentSelection.cluster === null) return;
+// Fonction pour créer la table des couleurs
+function createColorTable() {
+    const container = document.getElementById('color-table-container');
+    if (!container) {
+        console.warn('Conteneur de table des couleurs non trouvé');
+        return;
+    }
     
-    const clusterData = processedData.filter(d => d.cluster_id === currentSelection.cluster);
-    const recommendations = generateRecommendations(clusterData);
+    container.innerHTML = '';
     
-    const planContainer = d3.select('#action-plan');
-    planContainer.selectAll('*').remove();
+    if (typeof window.CLUSTER_COLORS === 'undefined') {
+        window.CLUSTER_COLORS = [
+            '#4E79A7', '#F28E2C', '#E15759', '#76B7B2', 
+            '#59A14F', '#EDC949', '#AF7AA1', '#FF9DA7'
+        ];
+    }
     
-    recommendations.forEach((rec, i) => {
-        planContainer.append('div')
-            .attr('class', `action-plan-item ${rec.priority}`)
-            .html(`
-                <h4>${rec.title}</h4>
-                <p>${rec.description}</p>
-                <div class="action-details">
-                    <span class="priority">Priorité: ${rec.priority}</span>
-                    <span class="impact">Impact estimé: ${rec.impact}</span>
+    const actualClusters = clusters.length;
+    
+    const clusterStats = clusters.map((cluster, index) => {
+        if (!cluster || cluster.length === 0) {
+            return { size: 0, depressionRate: 0, avgAge: 0, avgCGPA: 0 };
+        }
+        
+        const depressedCount = cluster.filter(d => d.depression === 1).length;
+        const depressionRate = (depressedCount / cluster.length * 100).toFixed(1);
+        const avgAge = d3.mean(cluster, d => d.age) || 0;
+        const avgCGPA = d3.mean(cluster, d => d.cgpa) || 0;
+        
+        return {
+            size: cluster.length,
+            depressionRate: depressionRate,
+            avgAge: avgAge.toFixed(1),
+            avgCGPA: avgCGPA.toFixed(2)
+        };
+    });
+    
+    const colorSchemes = [
+        {
+            id: 'cluster',
+            title: 'Par Cluster',
+            icon: '<i class="icon icon-palette" aria-hidden="true"></i>',
+            description: 'Groupes d\'étudiants similaires identifiés par K-means',
+            colors: Array.from({ length: actualClusters }, (_, i) => {
+                const stats = clusterStats[i] || { size: 0, depressionRate: 0 };
+                const color = window.CLUSTER_COLORS[i] || window.CLUSTER_COLORS[i % window.CLUSTER_COLORS.length];
+                
+                let description = `${stats.size} étudiants`;
+                if (stats.depressionRate > 0) {
+                    description += `, ${stats.depressionRate}% déprimés`;
+                }
+                
+                return {
+                    label: `Cluster ${i + 1}`,
+                    color: color,
+                    description: '',
+                    clusterIndex: i
+                };
+            })
+        },
+        {
+            id: 'depression',
+            title: 'Par Dépression',
+            icon: '<i class="icon icon-sad" aria-hidden="true"></i>',
+            description: 'Statut dépressif des étudiants',
+            colors: [
+                { 
+                    label: 'Déprimé', 
+                    color: '#E15759',
+                    description: 'Risque élevé de dépression' 
+                },
+                { 
+                    label: 'Non déprimé', 
+                    color: '#16a34a',
+                    description: 'Santé mentale normale' 
+                }
+            ]
+        },
+        {
+            id: 'suicidal',
+            title: 'Par Pensées Suicidaires',
+            icon: '<i class="icon icon-warning" aria-hidden="true"></i>',
+            description: 'Présence de pensées suicidaires',
+            colors: [
+                { 
+                    label: 'Avec pensées suicidaires', 
+                    color: '#e15759', // Rouge
+                    description: 'Pensées suicidaires présentes' 
+                },
+                { 
+                    label: 'Sans pensées suicidaires', 
+                    color: '#59A14F', // Vert
+                    description: 'Aucune pensée suicidaire' 
+                }
+            ]
+        },
+        {
+            id: 'academic',
+            title: 'Par Pression Académique',
+            icon: '<i class="icon icon-book" aria-hidden="true"></i>',
+            description: 'Niveau de stress académique (échelle 1-5)',
+            colors: [
+                { 
+                    label: 'Très faible (1)', 
+                    color: '#1e3a8a',
+                    description: 'Pression minimale' 
+                },
+                { 
+                    label: 'Faible (2)', 
+                    color: '#3b82f6',
+                    description: 'Pression légère' 
+                },
+                { 
+                    label: 'Moyenne (3)', 
+                    color: '#93c5fd',
+                    description: 'Pression modérée' 
+                },
+                { 
+                    label: 'Élevée (4)', 
+                    color: '#fca5a5',
+                    description: 'Pression importante' 
+                },
+                { 
+                    label: 'Très élevée (5)', 
+                    color: '#dc2626',
+                    description: 'Pression extrême' 
+                }
+            ]
+        }
+    ];
+    
+    colorSchemes.forEach(scheme => {
+        const card = document.createElement('div');
+        card.className = 'color-scheme-card';
+        card.dataset.scheme = scheme.id;
+        
+        const colorSchemeSelect = document.getElementById('color-scheme');
+        const currentScheme = colorSchemeSelect ? colorSchemeSelect.value : 'cluster';
+        const isActive = scheme.id === currentScheme;
+        
+        if (isActive) {
+            card.classList.add('active');
+        }
+        
+        card.innerHTML = `
+            <div class="color-scheme-header">
+                <div class="color-scheme-icon">${scheme.icon}</div>
+                <div class="color-scheme-title">${scheme.title}</div>
+                <div class="color-scheme-status ${isActive ? 'active' : ''}">
+                    ${isActive ? '● Actif' : '○ Inactif'}
                 </div>
-            `);
-    });
-    
-    document.getElementById('recommendations-modal').style.display = 'block';
-}
-
-// Générer des recommandations basées sur le cluster
-function generateRecommendations(clusterData) {
-    const depressionRate = clusterData.filter(d => d.depression === 1).length / clusterData.length;
-    const avgSleep = d3.mean(clusterData, d => d.sleep_duration);
-    const avgAcademic = d3.mean(clusterData, d => d.academic_pressure);
-    const avgFinancial = d3.mean(clusterData, d => d.financial_stress);
-    
-    const recommendations = [];
-    
-    if (depressionRate > 0.4) {
-        recommendations.push({
-            title: 'Intervention Psychologique Immédiate',
-            description: 'Organiser des séances de counselling obligatoires avec le service de santé universitaire.',
-            priority: 'high-priority',
-            impact: 'Élevé'
-        });
-    }
-    
-    if (avgSleep < 2.5) {
-        recommendations.push({
-            title: 'Ateliers de Gestion du Sommeil',
-            description: 'Programme de 4 semaines sur l\'hygiène du sommeil et techniques de relaxation.',
-            priority: 'medium-priority',
-            impact: 'Moyen-Élevé'
-        });
-    }
-    
-    if (avgAcademic > 3.5) {
-        recommendations.push({
-            title: 'Mentorat Académique',
-            description: 'Mettre en place un système de mentorat par les pairs pour la gestion du stress académique.',
-            priority: 'medium-priority',
-            impact: 'Moyen'
-        });
-    }
-    
-    if (avgFinancial > 3) {
-        recommendations.push({
-            title: 'Aide Financière et Bourses',
-            description: 'Identifier les étudiants éligibles aux aides existantes et simplifier les démarches.',
-            priority: 'high-priority',
-            impact: 'Élevé'
-        });
-    }
-    
-    // Recommandation générale
-    recommendations.push({
-        title: 'Groupe de Soutien Par les Pairs',
-        description: 'Créer un espace sécurisé pour le partage d\'expériences et l\'entraide.',
-        priority: 'low-priority',
-        impact: 'Moyen'
-    });
-    
-    return recommendations;
-}
-
-// Exporter le plan d'action
-function exportActionPlan() {
-    const planContent = document.getElementById('action-plan').innerText;
-    const blob = new Blob([planContent], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `plan-action-cluster-${currentSelection.cluster + 1}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-}
-
-// Afficher/masquer le loading
-function showLoading(show) {
-    const overlay = document.getElementById('loading-overlay');
-    if (overlay) {
-        overlay.style.display = show ? 'flex' : 'none';
-    }
-}
-
-// Initialiser au chargement de la page
-document.addEventListener('DOMContentLoaded', initProfiling);
-
-
-// ============================================================================
-// FONCTIONNALITÉS AJOUTÉES : SVG CLUSTER ET SCROLL AUTOMATIQUE
-// ============================================================================
-
-/**
- * Initialise la visualisation SVG et l'écouteur d'événements pour le sunburst
- */
-function initializeSVGVisualization() {
-    console.log('Initialisation de la visualisation SVG...');
-    
-    // Écouter l'événement du sunburst
-    window.addEventListener('sunburstClusterSelected', (event) => {
-        const clusterId = event.detail.clusterId;
-        console.log('Événement reçu du sunburst pour cluster:', clusterId);
+            </div>
+            <div class="color-scheme-description">
+                ${scheme.description}
+            </div>
+            <div class="color-items">
+                ${scheme.colors.map(item => `
+                    <div class="color-item" ${item.clusterIndex !== undefined ? `data-cluster="${item.clusterIndex}"` : ''}>
+                        <div class="color-sample" style="background-color: ${item.color};"></div>
+                        <div class="color-label">${item.label}</div>
+                        <div class="color-value">${item.description}</div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
         
-        if (clusterId !== undefined && clusters[clusterId]) {
-            // Sélectionner le cluster (utilise la fonction existante)
-            selectCluster(clusterId);
-            
-            // Mettre à jour la visualisation SVG
-            updateClusterSVGVisualization(clusterId);
-            
-            // Scroll vers la section SVG
-            scrollToSVGSection();
-        }
-    });
-    
-    // Initialiser les boutons d'export et de toggle
-    setupSVGControls();
-    
-    // Créer le SVG pour le cluster par défaut (0) au démarrage
-    if (clusters.length > 0) {
-        setTimeout(() => {
-            updateClusterSVGVisualization(0);
-        }, 1000);
-    }
-    
-    console.log('Visualisation SVG initialisée');
-}
-
-/**
- * Met à jour la visualisation SVG pour un cluster spécifique
- */
-function updateClusterSVGVisualization(clusterId) {
-    console.log('Mise à jour SVG pour cluster:', clusterId);
-    
-    if (!clusters[clusterId]) {
-        console.warn('Cluster', clusterId, 'non trouvé');
-        return;
-    }
-    
-    const clusterData = clusters[clusterId];
-    
-  /*  // 1. Créer le graphique SVG
-    if (typeof createScalableVectorGraphic === 'function') {
-        createScalableVectorGraphic('#scalable-svg-container', clusterData, clusterId);
-    } else {
-        console.warn('createScalableVectorGraphic non disponible');
-        showSVGErrorMessage('#scalable-svg-container', 'Fonction SVG non disponible');
-    }*/
-    
-    // 2. Afficher les étudiants du cluster
-    /*if (typeof displayClusterStudents === 'function') {
-        displayClusterStudents('#cluster-students-list', clusterData, clusterId);
-    } else {
-        console.warn('displayClusterStudents non disponible');
-        showSVGErrorMessage('#cluster-students-list', 'Fonction d\'affichage des étudiants non disponible');
-    }*/
-    
-    // 3. Afficher les outliers du cluster
-   /* if (typeof displayClusterOutliers === 'function') {
-        displayClusterOutliers(clusterData, '#cluster-outliers-list', CONFIG.featureKeys);
-    } else {
-        console.warn('displayClusterOutliers non disponible');
-        showSVGErrorMessage('#cluster-outliers-list', 'Fonction d\'affichage des outliers non disponible');
-    }*/
-    
-    // 4. Mettre à jour le titre de la section
-    updateSVGTitle(clusterId);
-}
-
-/**
- * Fait défiler la page vers la section SVG
- */
-function scrollToSVGSection() {
-    const section = document.getElementById('scalableVecOutlier');
-    if (section) {
-        // Petit délai pour laisser le temps à la page de se mettre à jour
-        setTimeout(() => {
-            section.scrollIntoView({ 
-                behavior: 'smooth', 
-                block: 'start'
-            });
-            
-            // Effet visuel de surbrillance
-            highlightSVGSection(section);
-        }, 300);
-    } else {
-        console.warn('Section scalableVecOutlier non trouvée');
-    }
-}
-
-/**
- * Met en surbrillance la section SVG
- */
-function highlightSVGSection(section) {
-    if (!section) return;
-    
-    // Sauvegarder les styles originaux
-    const originalBackground = section.style.backgroundColor;
-    const originalBoxShadow = section.style.boxShadow;
-    const originalTransition = section.style.transition;
-    
-    // Appliquer l'effet de surbrillance
-    section.style.transition = 'background-color 0.5s, box-shadow 0.5s';
-    section.style.backgroundColor = '#fffbeb';
-    section.style.boxShadow = '0 0 20px rgba(245, 158, 11, 0.4)';
-    
-    // Retirer l'effet après 2 secondes
-    setTimeout(() => {
-        section.style.backgroundColor = originalBackground;
-        section.style.boxShadow = originalBoxShadow;
-        
-        // Après l'animation, rétablir la transition d'origine
-        setTimeout(() => {
-            section.style.transition = originalTransition;
-        }, 500);
-    }, 2000);
-}
-
-/**
- * Initialise les contrôles de la section SVG
- */
-function setupSVGControls() {
-    // Bouton d'export SVG
-    const exportButton = document.getElementById('export-svg');
-    if (exportButton) {
-        exportButton.addEventListener('click', exportSVG);
-    }
-    
-    // Bouton de changement de vue
-    const toggleButton = document.getElementById('toggle-view');
-    if (toggleButton) {
-        toggleButton.addEventListener('click', toggleSVGView);
-    }
-}
-
-/**
- * Exporte le SVG actuel
- */
-function exportSVG() {
-    const svgElement = document.querySelector('#scalable-svg-container svg');
-    if (!svgElement) {
-        alert('Aucun graphique SVG à exporter');
-        return;
-    }
-    
-    try {
-        const serializer = new XMLSerializer();
-        let source = serializer.serializeToString(svgElement);
-        
-        // Ajouter la déclaration XML si elle n'existe pas
-        if (!source.match(/^<svg[^>]+xmlns="http:\/\/www\.w3\.org\/2000\/svg"/)) {
-            source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
-        }
-        
-        source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
-        
-        const blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `cluster-${currentSelection.cluster !== null ? currentSelection.cluster + 1 : 'unknown'}-visualisation.svg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        URL.revokeObjectURL(url);
-        
-        console.log('SVG exporté avec succès');
-    } catch (error) {
-        console.error('Erreur lors de l\'export SVG:', error);
-        alert('Erreur lors de l\'export du SVG');
-    }
-}
-
-/**
- * Change la vue du SVG (simple alternance)
- */
-let currentSVGView = 'scatter';
-function toggleSVGView() {
-    if (currentSVGView === 'scatter') {
-        currentSVGView = 'radial';
-        console.log('Changement vers vue radiale');
-        // Ici vous pourriez appeler une fonction différente pour créer un graphique radial
-    } else {
-        currentSVGView = 'scatter';
-        console.log('Changement vers vue scatter');
-        // Revenir à la vue scatter plot
-    }
-    
-    // Mettre à jour le bouton
-    const toggleButton = document.getElementById('toggle-view');
-    if (toggleButton) {
-        toggleButton.innerHTML = currentSVGView === 'scatter' ? '<i class="icon icon-refresh" aria-hidden="true"></i> Vue Radiale' : '<i class="icon icon-refresh" aria-hidden="true"></i> Vue Scatter';
-    }
-    
-    // Re-créer le SVG avec la nouvelle vue si un cluster est sélectionné
-    if (currentSelection.cluster !== null) {
-        updateClusterSVGVisualization(currentSelection.cluster);
-    }
-}
-
-/**
- * Affiche un message d'erreur dans un conteneur SVG
- */
-function showSVGErrorMessage(containerSelector, message) {
-    const container = d3.select(containerSelector);
-    container.selectAll('*').remove();
-    
-    container.append('div')
-        .style('display', 'flex')
-        .style('flex-direction', 'column')
-        .style('align-items', 'center')
-        .style('justify-content', 'center')
-        .style('height', '100%')
-        .style('color', '#6b7280')
-        .style('text-align', 'center')
-        .style('padding', '20px')
-        .html(`
-            <div style="font-size: 48px; margin-bottom: 20px;"><i class="icon icon-warning" aria-hidden="true"></i></div>
-            <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">Fonctionnalité temporairement indisponible</div>
-            <div style="font-size: 14px;">${message}</div>
-        `);
-}
-
-/**
- * Met à jour le titre de la section SVG
- */
-function updateSVGTitle(clusterId) {
-    const titleElement = document.querySelector('#scalableVecOutlier .card-header h3');
-    if (titleElement) {
-        const studentCount = clusters[clusterId] ? clusters[clusterId].length : 0;
-        const depressedCount = clusters[clusterId] ? clusters[clusterId].filter(d => d.depression === 1).length : 0;
-        const depressionRate = studentCount > 0 ? (depressedCount / studentCount * 100).toFixed(1) : 0;
-        
-        titleElement.innerHTML = `<i class="icon icon-palette" aria-hidden="true"></i> Cluster ${clusterId + 1} - ${studentCount} étudiants (${depressionRate}% déprimés)`;
-    }
-}
-
-/**
- * Étend la fonction selectCluster existante pour inclure la mise à jour SVG
- * (Surcharge douce sans remplacer la fonction existante)
- */
-const originalSelectCluster = window.selectCluster;
-window.selectCluster = function(clusterIndex) {
-    // Appeler la fonction originale
-    if (typeof originalSelectCluster === 'function') {
-        originalSelectCluster(clusterIndex);
-    }
-    
-    // Ajouter la mise à jour SVG
-    updateClusterSVGVisualization(clusterIndex);
-};
-
-// ============================================================================
-// MODIFICATION DE LA FONCTION D'INITIALISATION PRINCIPALE
-// ============================================================================
-
-// Modifiez légèrement la fonction initProfiling pour inclure l'initialisation SVG
-const originalInitProfiling = window.initProfiling;
-window.initProfiling = async function() {
-    // Appeler la fonction originale
-    if (typeof originalInitProfiling === 'function') {
-        await originalInitProfiling();
-    }
-    
-    // Initialiser la visualisation SVG après l'initialisation principale
-    setTimeout(() => {
-        initializeSVGVisualization();
-    }, 500);
-};
-
-// ============================================================================
-// STYLES CSS DYNAMIQUES POUR LA SECTION SVG
-// ============================================================================
-
-// Ajoutez ces styles dynamiquement s'ils ne sont pas déjà dans votre CSS
-function addSVGStyles() {
-    const styleId = 'svg-section-styles';
-    if (!document.getElementById(styleId)) {
-        const style = document.createElement('style');
-        style.id = styleId;
-        style.textContent = `
-            /* Styles pour la section SVG */
-            .svg-content-container {
-                display: flex;
-                gap: 20px;
-                margin-bottom: 20px;
+        card.addEventListener('click', () => {
+            if (colorSchemeSelect) {
+                colorSchemeSelect.value = scheme.id;
+                const changeEvent = new Event('change');
+                colorSchemeSelect.dispatchEvent(changeEvent);
+                updateActiveColorCard(scheme.id);
             }
+        });
+        
+        container.appendChild(card);
+    });
+    
+    setupColorTableToggle();
+}
+
+// Fonction pour mettre à jour la carte active
+function updateActiveColorCard(activeSchemeId) {
+    document.querySelectorAll('.color-scheme-card').forEach(card => {
+        const schemeId = card.dataset.scheme;
+        const isActive = schemeId === activeSchemeId;
+        
+        card.classList.toggle('active', isActive);
+        
+        const statusElement = card.querySelector('.color-scheme-status');
+        if (statusElement) {
+            statusElement.textContent = isActive ? '● Actif' : '○ Inactif';
+            statusElement.classList.toggle('active', isActive);
+        }
+    });
+}
+
+// Fonction pour configurer le toggle de la table
+function setupColorTableToggle() {
+    const toggleButton = document.querySelector('.toggle-color-table');
+    const tableContainer = document.querySelector('.color-table-container');
+    
+    if (toggleButton && tableContainer) {
+        const isCollapsed = tableContainer.classList.contains('collapsed');
+        toggleButton.textContent = isCollapsed ? '▶' : '▼';
+        
+        toggleButton.addEventListener('click', () => {
+            const isCollapsed = tableContainer.classList.contains('collapsed');
             
-            @media (max-width: 1200px) {
-                .svg-content-container {
-                    flex-direction: column;
+            if (isCollapsed) {
+                tableContainer.classList.remove('collapsed');
+                tableContainer.classList.add('expanded');
+                toggleButton.textContent = '▼';
+            } else {
+                tableContainer.classList.add('collapsed');
+                tableContainer.classList.remove('expanded');
+                toggleButton.textContent = '▶';
+            }
+        });
+    }
+}
+
+// Fonction pour initialiser la table des couleurs
+function initializeColorTable() {
+    try {
+        createColorTable();
+        
+        const colorSchemeSelect = document.getElementById('color-scheme');
+        if (colorSchemeSelect) {
+            colorSchemeSelect.addEventListener('change', function() {
+                updateActiveColorCard(this.value);
+            });
+        }
+    } catch (error) {
+        console.error('Erreur lors de la création de la table des couleurs:', error);
+    }
+}
+
+function setupClusterClickInTable() {
+    document.addEventListener('click', function(e) {
+        const colorItem = e.target.closest('.color-item[data-cluster]');
+        if (colorItem) {
+            const clusterIndex = parseInt(colorItem.dataset.cluster);
+            if (!isNaN(clusterIndex)) {
+                selectCluster(clusterIndex);
+                
+                document.querySelectorAll('.color-item[data-cluster]').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                colorItem.classList.add('selected');
+                
+                const tableContainer = document.querySelector('.color-table-container');
+                const toggleButton = document.querySelector('.toggle-color-table');
+                if (tableContainer && !tableContainer.classList.contains('collapsed')) {
+                    tableContainer.classList.add('collapsed');
+                    tableContainer.classList.remove('expanded');
+                    if (toggleButton) {
+                        toggleButton.textContent = '▶';
+                    }
                 }
             }
-            
-            .svg-container {
-                flex: 3;
-                background: white;
-                border-radius: 8px;
-                padding: 15px;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                min-height: 400px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            
-            .cluster-students-container {
-                flex: 2;
-                background: white;
-                border-radius: 8px;
-                padding: 15px;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                max-height: 400px;
-                overflow-y: auto;
-            }
-            
-            .cluster-students-container h4 {
-                margin-top: 0;
-                margin-bottom: 15px;
-                color: #1f2937;
-                font-size: 16px;
-                border-bottom: 2px solid #e5e7eb;
-                padding-bottom: 8px;
-            }
-            
-            .cluster-students-list {
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-            }
-            
-            .student-card-svg {
-                background: #f8fafc;
-                border-radius: 6px;
-                padding: 10px;
-                border-left: 4px solid #4f46e5;
-                transition: all 0.2s;
-            }
-            
-            .student-card-svg:hover {
-                background: #f1f5f9;
-                transform: translateX(4px);
-            }
-            
-            .outliers-section {
-                background: white;
-                border-radius: 8px;
-                padding: 15px;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                margin-top: 20px;
-            }
-            
-            .outliers-section h4 {
-                margin-top: 0;
-                margin-bottom: 15px;
-                color: #dc2626;
-                font-size: 16px;
-            }
-            
-            .outliers-list {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 10px;
-            }
-            
-            .outlier-item {
-                background: #fee2e2;
-                color: #991b1b;
-                padding: 8px 12px;
-                border-radius: 20px;
-                font-size: 12px;
-                font-weight: 500;
-                border: 1px solid #fecaca;
-            }
-            
-            /* Styles pour les points SVG */
-            .student-point, .outlier-point {
-                transition: r 0.2s, opacity 0.2s;
-            }
-            
-            .student-point:hover, .outlier-point:hover {
-                cursor: pointer;
-            }
-        `;
-        document.head.appendChild(style);
-    }
+        }
+    });
 }
 
-
-// Ajouter les styles au chargement
-document.addEventListener('DOMContentLoaded', addSVGStyles);
-
-// Fonction pour initialiser le bouton d'explication
 // Fonction pour initialiser le bouton d'explication
 function initializeExplanationButton() {
     const explanationContent = `
@@ -1815,10 +2022,9 @@ function initializeExplanationButton() {
     const container = document.querySelector('#cluster-explanation-btn');
     if (!container) return;
 
-    // NETTOYAGE : On vide le conteneur avant d'ajouter quoi que ce soit
-    container.innerHTML = ''; 
+    container.innerHTML = '';
 
-    // Création du bouton avec effet hover
+    // Création du bouton
     const button = document.createElement('button');
     button.className = 'comment-button';
     button.innerHTML = '💬';
@@ -1840,7 +2046,6 @@ function initializeExplanationButton() {
         const isVisible = box.style.display === 'block';
         box.style.display = isVisible ? 'none' : 'block';
         
-        // Animation d'apparition
         if (box.style.display === 'block') {
             box.style.opacity = '0';
             box.style.transform = 'translateY(-10px)';
@@ -1863,307 +2068,6 @@ function initializeExplanationButton() {
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && box.style.display === 'block') {
             box.style.display = 'none';
-        }
-    });
-
-    console.log('Bouton d\'explication créé avec une interface attirante');
-}
-
-// Fonction pour créer la table des couleurs
-// Fonction pour créer la table des couleurs avec les vraies couleurs des clusters
-function createColorTable() {
-    const container = document.getElementById('color-table-container');
-    if (!container) {
-        console.warn('Conteneur de table des couleurs non trouvé');
-        return;
-    }
-    
-    // Vider le conteneur
-    container.innerHTML = '';
-    
-    // S'assurer que CLUSTER_COLORS est disponible
-    if (typeof window.CLUSTER_COLORS === 'undefined') {
-        console.warn('CLUSTER_COLORS non défini, utilisation des couleurs par défaut');
-        window.CLUSTER_COLORS = [
-            '#4E79A7', '#F28E2C', '#E15759', '#76B7B2', 
-            '#59A14F', '#EDC949', '#AF7AA1', '#FF9DA7'
-        ];
-    }
-    
-    // Obtenir le nombre réel de clusters
-    const actualClusters = clusters.length;
-    console.log(`Création table couleurs avec ${actualClusters} clusters`);
-    console.log('Couleurs disponibles:', window.CLUSTER_COLORS);
-    
-    // Calculer les statistiques de chaque cluster pour les descriptions
-    const clusterStats = clusters.map((cluster, index) => {
-        if (!cluster || cluster.length === 0) {
-            return { size: 0, depressionRate: 0, avgAge: 0, avgCGPA: 0 };
-        }
-        
-        const depressedCount = cluster.filter(d => d.depression === 1).length;
-        const depressionRate = (depressedCount / cluster.length * 100).toFixed(1);
-        const avgAge = d3.mean(cluster, d => d.age) || 0;
-        const avgCGPA = d3.mean(cluster, d => d.cgpa) || 0;
-        
-        return {
-            size: cluster.length,
-            depressionRate: depressionRate,
-            avgAge: avgAge.toFixed(1),
-            avgCGPA: avgCGPA.toFixed(2)
-        };
-    });
-    
-    // Définir les différents schémas de couleur
-    const colorSchemes = [
-        {
-            id: 'cluster',
-            title: 'Par Cluster',
-            icon: '<i class="icon icon-palette" aria-hidden="true"></i>',
-            description: 'Groupes d\'étudiants similaires identifiés par K-means',
-            colors: Array.from({ length: actualClusters }, (_, i) => {
-                const stats = clusterStats[i] || { size: 0, depressionRate: 0 };
-                const color = window.CLUSTER_COLORS[i] || window.CLUSTER_COLORS[i % window.CLUSTER_COLORS.length];
-                
-                // Description dynamique basée sur les stats
-                let description = `${stats.size} étudiants`;
-                if (stats.depressionRate > 0) {
-                    description += `, ${stats.depressionRate}% déprimés`;
-                }
-                
-                return {
-                    label: `Cluster ${i + 1}`,
-                    color: color,
-                    description: '',
-                    clusterIndex: i
-                };
-            })
-        },
-        {
-            id: 'depression',
-            title: 'Par Dépression',
-            icon: '<i class="icon icon-sad" aria-hidden="true"></i>',
-            description: 'Statut dépressif des étudiants',
-            colors: [
-                { 
-                    label: 'Déprimé', 
-                    color: '#E15759', // Rouge du cluster 3
-                    description: 'Risque élevé de dépression' 
-                },
-                { 
-                    label: 'Non déprimé', 
-                    color: '#16a34a', // Vert du cluster 4
-                    description: 'Santé mentale normale' 
-                }
-            ]
-        },
-        {
-            id: 'suicidal',
-            title: 'Par Pensées Suicidaires',
-            icon: '<i class="icon icon-warning" aria-hidden="true"></i>',
-            description: 'Niveau de risque suicidaire',
-            colors: [
-                { 
-                    label: 'Risque élevé', 
-                    color: '#E15759', // Rouge
-                    description: 'Pensées suicidaires présentes' 
-                },
-                { 
-                    label: 'Risque moyen', 
-                    color: '#F28E2C', // Orange
-                    description: 'Facteurs de risque modérés' 
-                },
-                { 
-                    label: 'Faible risque', 
-                    color: '#59A14F', // Vert
-                    description: 'Aucune pensée suicidaire' 
-                }
-            ]
-        },
-        {
-            id: 'academic',
-            title: 'Par Pression Académique',
-            icon: '<i class="icon icon-book" aria-hidden="true"></i>',
-            description: 'Niveau de stress académique (échelle 1-5)',
-            colors: [
-                { 
-                    label: 'Très faible (1)', 
-                    // Gradient rouge-bleu - BLEU FONCÉ pour faible pression
-                    color: '#1e3a8a', // Bleu foncé
-                    description: 'Pression minimale' 
-                },
-                { 
-                    label: 'Faible (2)', 
-                    color: '#3b82f6', // Bleu
-                    description: 'Pression légère' 
-                },
-                { 
-                    label: 'Moyenne (3)', 
-                    color: '#93c5fd', // Bleu clair (milieu du gradient)
-                    description: 'Pression modérée' 
-                },
-                { 
-                    label: 'Élevée (4)', 
-                    color: '#fca5a5', // Rouge clair
-                    description: 'Pression importante' 
-                },
-                { 
-                    label: 'Très élevée (5)', 
-                    // Gradient rouge-bleu - ROUGE pour forte pression
-                    color: '#dc2626', // Rouge foncé
-                    description: 'Pression extrême' 
-                }
-            ]
-        }
-    ];
-    
-    // Créer une carte pour chaque schéma de couleur
-    colorSchemes.forEach(scheme => {
-        const card = document.createElement('div');
-        card.className = 'color-scheme-card';
-        card.dataset.scheme = scheme.id;
-        
-        // Marquer comme actif si c'est le schéma courant
-        const colorSchemeSelect = document.getElementById('color-scheme');
-        const currentScheme = colorSchemeSelect ? colorSchemeSelect.value : 'cluster';
-        const isActive = scheme.id === currentScheme;
-        
-        if (isActive) {
-            card.classList.add('active');
-        }
-        
-        card.innerHTML = `
-            <div class="color-scheme-header">
-                <div class="color-scheme-icon">${scheme.icon}</div>
-                <div class="color-scheme-title">${scheme.title}</div>
-                <div class="color-scheme-status ${isActive ? 'active' : ''}">
-                    ${isActive ? '● Actif' : '○ Inactif'}
-                </div>
-            </div>
-            <div class="color-scheme-description">
-                ${scheme.description}
-            </div>
-            <div class="color-items">
-                ${scheme.colors.map(item => `
-                    <div class="color-item" ${item.clusterIndex !== undefined ? `data-cluster="${item.clusterIndex}"` : ''}>
-                        <div class="color-sample" style="background-color: ${item.color};"></div>
-                        <div class="color-label">${item.label}</div>
-                        <div class="color-value">${item.description}</div>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-        
-        // Ajouter un événement de clic pour changer de schéma
-        card.addEventListener('click', () => {
-            if (colorSchemeSelect) {
-                colorSchemeSelect.value = scheme.id;
-                // Déclencher l'événement de changement
-                const changeEvent = new Event('change');
-                colorSchemeSelect.dispatchEvent(changeEvent);
-                
-                // Mettre à jour les cartes actives
-                updateActiveColorCard(scheme.id);
-            }
-        });
-        
-        container.appendChild(card);
-    });
-    
-    // Ajouter la fonctionnalité de toggle
-    setupColorTableToggle();
-    
-    console.log(`Table des couleurs créée avec ${actualClusters} clusters`);
-}
-
-// Fonction pour mettre à jour la carte active
-function updateActiveColorCard(activeSchemeId) {
-    document.querySelectorAll('.color-scheme-card').forEach(card => {
-        const schemeId = card.dataset.scheme;
-        const isActive = schemeId === activeSchemeId;
-        
-        card.classList.toggle('active', isActive);
-        
-        const statusElement = card.querySelector('.color-scheme-status');
-        if (statusElement) {
-            statusElement.textContent = isActive ? '● Actif' : '○ Inactif';
-            statusElement.classList.toggle('active', isActive);
-        }
-    });
-}
-
-// Fonction pour configurer le toggle de la table
-function setupColorTableToggle() {
-    const toggleButton = document.querySelector('.toggle-color-table');
-    const tableContainer = document.querySelector('.color-table-container');
-    
-    if (toggleButton && tableContainer) {
-        // Vérifier l'état initial
-        const isCollapsed = tableContainer.classList.contains('collapsed');
-        toggleButton.textContent = isCollapsed ? '▶' : '▼';
-        
-        toggleButton.addEventListener('click', () => {
-            const isCollapsed = tableContainer.classList.contains('collapsed');
-            
-            if (isCollapsed) {
-                // Déplier
-                tableContainer.classList.remove('collapsed');
-                tableContainer.classList.add('expanded');
-                toggleButton.textContent = '▼';
-            } else {
-                // Replier
-                tableContainer.classList.add('collapsed');
-                tableContainer.classList.remove('expanded');
-                toggleButton.textContent = '▶';
-            }
-        });
-    }
-}
-
-// Fonction pour initialiser la table des couleurs
-function initializeColorTable() {
-    try {
-        createColorTable();
-        
-        // Écouter les changements de schéma de couleur
-        const colorSchemeSelect = document.getElementById('color-scheme');
-        if (colorSchemeSelect) {
-            colorSchemeSelect.addEventListener('change', function() {
-                // Mettre à jour visuellement quelle carte est active
-                updateActiveColorCard(this.value);
-            });
-        }
-    } catch (error) {
-        console.error('Erreur lors de la création de la table des couleurs:', error);
-    }
-}
-
-function setupClusterClickInTable() {
-    document.addEventListener('click', function(e) {
-        const colorItem = e.target.closest('.color-item[data-cluster]');
-        if (colorItem) {
-            const clusterIndex = parseInt(colorItem.dataset.cluster);
-            if (!isNaN(clusterIndex)) {
-                // Sélectionner le cluster
-                selectCluster(clusterIndex);
-                
-                // Mettre en surbrillance l'élément
-                document.querySelectorAll('.color-item[data-cluster]').forEach(item => {
-                    item.classList.remove('selected');
-                });
-                colorItem.classList.add('selected');
-                
-                // Fermer la table si elle est ouverte
-                const tableContainer = document.querySelector('.color-table-container');
-                const toggleButton = document.querySelector('.toggle-color-table');
-                if (tableContainer && !tableContainer.classList.contains('collapsed')) {
-                    tableContainer.classList.add('collapsed');
-                    tableContainer.classList.remove('expanded');
-                    if (toggleButton) {
-                        toggleButton.textContent = '▶';
-                    }
-                }
-            }
         }
     });
 }
@@ -2290,10 +2194,8 @@ function initializeRadarExplanationButton() {
     const container = document.querySelector('#radar-explanation-btn');
     if (!container) return;
 
-    // NETTOYAGE : On vide le conteneur avant d'ajouter quoi que ce soit
     container.innerHTML = '';
 
-    // Création du bouton avec effet hover
     const button = document.createElement('button');
     button.className = 'comment-button radar-comment-button';
     button.innerHTML = '💬';
@@ -2314,7 +2216,6 @@ function initializeRadarExplanationButton() {
         box-shadow: 0 1px 3px rgba(99, 102, 241, 0.3);
     `;
     
-    // Effet hover
     button.addEventListener('mouseenter', () => {
         button.style.transform = 'translateY(-2px)';
         button.style.boxShadow = '0 4px 6px rgba(99, 102, 241, 0.4)';
@@ -2325,7 +2226,6 @@ function initializeRadarExplanationButton() {
         button.style.boxShadow = '0 1px 3px rgba(99, 102, 241, 0.3)';
     });
 
-    // Création de la boîte d'explication
     const box = document.createElement('div');
     box.className = 'comment-box radar-comment-box';
     box.innerHTML = explanationContent;
@@ -2346,18 +2246,15 @@ function initializeRadarExplanationButton() {
         animation: fadeIn 0.3s ease-out;
     `;
 
-    // Ajout des éléments
     container.style.position = 'relative';
     container.appendChild(button);
     container.appendChild(box);
 
-    // Gestion du clic sur le bouton
     button.addEventListener('click', (e) => {
         e.stopPropagation();
         const isVisible = box.style.display === 'block';
         box.style.display = isVisible ? 'none' : 'block';
         
-        // Animation d'apparition
         if (box.style.display === 'block') {
             box.style.opacity = '0';
             box.style.transform = 'translateY(-10px)';
@@ -2367,7 +2264,6 @@ function initializeRadarExplanationButton() {
                 box.style.transform = 'translateY(0)';
             }, 10);
             
-            // Changer le bouton
             button.innerHTML = '💬';
             button.style.background = '#000000';
         } else {
@@ -2376,16 +2272,14 @@ function initializeRadarExplanationButton() {
         }
     });
 
-    // Fermer en cliquant ailleurs
     document.addEventListener('click', (e) => {
         if (!container.contains(e.target)) {
             box.style.display = 'none';
             button.innerHTML = '💬';
-            button.style.background ='#000000';
+            button.style.background = '#000000';
         }
     });
 
-    // Fermer avec la touche Échap
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && box.style.display === 'block') {
             box.style.display = 'none';
@@ -2393,13 +2287,22 @@ function initializeRadarExplanationButton() {
             button.style.background = '#000000';
         }
     });
-
-    console.log('Bouton d\'explication du radar créé');
 }
 
-// Ajoutez aussi le CSS pour l'animation
-const radarStyles = document.createElement('style');
-radarStyles.textContent = `
+// Afficher/masquer le loading
+function showLoading(show) {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.style.display = show ? 'flex' : 'none';
+    }
+}
+
+// Initialiser au chargement de la page
+document.addEventListener('DOMContentLoaded', initProfiling);
+
+// Ajouter les styles CSS
+const profilingStyles = document.createElement('style');
+profilingStyles.textContent = `
     @keyframes fadeIn {
         from {
             opacity: 0;
@@ -2409,6 +2312,25 @@ radarStyles.textContent = `
             opacity: 1;
             transform: translateY(0);
         }
+    }
+    
+    .filtering {
+        pointer-events: none;
+        opacity: 0.7;
+        transition: opacity 0.3s;
+    }
+    
+    .filtering::after {
+        content: 'Chargement...';
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 5px;
+        z-index: 10000;
     }
     
     .radar-comment-button:hover {
@@ -2432,50 +2354,48 @@ radarStyles.textContent = `
     .radar-comment-box::-webkit-scrollbar-thumb:hover {
         background: #0c0c0c;
     }
+    
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        font-size: 18px;
+        color: #4f46e5;
+    }
+    
+    .student-card {
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .student-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .student-card.selected {
+        border-color: #4f46e5;
+        background-color: #f5f3ff;
+    }
+    
+    .legend-item.active {
+        background-color: #f5f3ff;
+        border-color: #4f46e5;
+        font-weight: 600;
+    }
+    
+    .no-data {
+        padding: 20px;
+        text-align: center;
+        color: #6b7280;
+        font-style: italic;
+    }
 `;
-document.head.appendChild(radarStyles);
-
-// Fonction pour mettre à jour toutes les visualisations
-function updateAllVisualizations(filteredData, clusters) {
-    console.log('Mise à jour de toutes les visualisations...');
-    
-    // 1. Scatter plot
-    if (typeof updateScatterPlot === 'function' && scatterPlot) {
-        updateScatterPlot('#cluster-map', filteredData, clusters, currentSelection.projection, currentColorScheme);
-    }
-    
-    // 2. Sunburst
-    try {
-        if (typeof createSunburstChart === 'function') {
-            const container = document.getElementById('bubble-chart-container');
-            if (container) {
-                container.innerHTML = '';
-                createSunburstChart('#bubble-chart-container', filteredData, clusters);
-            }
-        }
-    } catch (error) {
-        console.error('Erreur dans la mise à jour du sunburst:', error);
-    }
-    
-    // 3. Radar chart (si un étudiant ou cluster est sélectionné)
-    if (currentSelection.student) {
-        const student = filteredData.find(d => d.id === currentSelection.student.id);
-        if (student) {
-            updateRadarForStudent(student);
-        }
-    } else if (currentSelection.cluster !== null && clusters[currentSelection.cluster]) {
-        updateRadarForCluster(clusters[currentSelection.cluster]);
-    }
-    
-    // 4. Heatmap (si un cluster est sélectionné)
-    if (currentSelection.cluster !== null && clusters[currentSelection.cluster]) {
-        updateClusterHeatmap(clusters[currentSelection.cluster]);
-    }
-    
-    // 5. Statistiques (si un cluster est sélectionné)
-    if (currentSelection.cluster !== null && clusters[currentSelection.cluster]) {
-        updateClusterStats(clusters[currentSelection.cluster]);
-    }
-    
-    console.log('Toutes les visualisations mises à jour');
-}
+document.head.appendChild(profilingStyles);

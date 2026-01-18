@@ -15,9 +15,24 @@ var Utils = {
             
             // Durée de sommeil
             'Less than 5 hours': 1,
+            'Less than 5': 1,
+            '\'Less than 5 hours\'': 1,
+            
             '5-6 hours': 2,
+            '5-6': 2,
+            '\'5-6 hours\'': 2,
+            
+            '6-7 hours': 3,
+            '6-7': 3,
+            '\'6-7 hours\'': 3,
+            
             '7-8 hours': 4,
+            '7-8': 4,
+            '\'7-8 hours\'': 4,
+            
             'More than 8 hours': 5,
+            'More than 8': 5,
+            '\'More than 8 hours\'': 5,
             
             // Satisfaction
             'Very Dissatisfied': 1,

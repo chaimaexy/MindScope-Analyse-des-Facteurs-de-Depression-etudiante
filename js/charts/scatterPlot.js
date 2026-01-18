@@ -30,6 +30,10 @@ const COLOR_SCHEMES = {
 };
 
 function createScatterPlot(container, data, clusters, colors, projection = 'pca') {
+     if (data.length > 2800) {
+        data = d3.shuffle(data).slice(0, 2800);
+        console.log(`Limité à 500 points pour la lisibilité (original: ${data.length})`);
+    }
     console.log('Création du scatter plot...', data.length, 'points');
     
     const containerElement = document.querySelector(container);
@@ -503,7 +507,7 @@ function getPointColor(d, scheme, clusterColors) {
         case 'depression':
             return d.depression === 1 ? '#dc2626' : '#16a34a';
         case 'suicidal':
-            return d.hasSuicidalThoughts ? '#dc2626' : '#3b82f6';
+            return d.hasSuicidalThoughts ? '#E15759' : '#59A14F';
         case 'academic':
             const pressure = d.academic_pressure || 0;
             const intensity = pressure / 5;

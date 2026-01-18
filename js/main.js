@@ -89,30 +89,67 @@ function preprocessStudentData(rawData) {
                 cgpa: parseNumber(row.CGPA || row.cgpa, 5),
                 study_satisfaction: parseNumber(row['Study Satisfaction'] || row.study_satisfaction, 3),
                 job_satisfaction: parseNumber(row['Job Satisfaction'] || row.job_satisfaction, 0),
-                sleep_duration: Utils.mapScore(row['Sleep Duration'] || row.sleep_duration),
-                dietary_habits: Utils.mapScore(row['Dietary Habits'] || row.dietary_habits),
+                // CORRECTION : Gestion des guillemets pour sleep_duration
+                sleep_duration: (function() {
+                    const rawValue = row['Sleep Duration'] || row.sleep_duration;
+                    console.log(`[DEBUG Sleep] Étudiant ${row.id || index}: "${rawValue}"`);
+                    
+                    // Nettoyer les guillemets
+                    const cleanValue = rawValue ? rawValue.toString().replace(/['"]/g, '').trim() : '';
+                    console.log(`[DEBUG Sleep Cleaned] "${cleanValue}"`);
+                    
+                    const mapped = Utils.mapScore(cleanValue);
+                    console.log(`[DEBUG Sleep Mapped] ${cleanValue} -> ${mapped}`);
+                    
+                    return Math.max(1, Math.min(5, mapped));
+                })(),
+                // CORRECTION : Gestion des guillemets pour dietary_habits
+                dietary_habits: (function() {
+                    const rawValue = row['Dietary Habits'] || row.dietary_habits;
+                    console.log(`[DEBUG Diet] Étudiant ${row.id || index}: "${rawValue}"`);
+                    
+                    // Nettoyer les guillemets
+                    const cleanValue = rawValue ? rawValue.toString().replace(/['"]/g, '').trim() : '';
+                    console.log(`[DEBUG Diet Cleaned] "${cleanValue}"`);
+                    
+                    const mapped = Utils.mapScore(cleanValue);
+                    console.log(`[DEBUG Diet Mapped] ${cleanValue} -> ${mapped}`);
+                    
+                    return Math.max(1, Math.min(5, mapped));
+                })(),
                 degree: (row.Degree || row.degree || 'Unknown').toString().trim(),
-              hasSuicidalThoughts: (function() {
-    const value = row['Have you ever had suicidal thoughts ?'] || row['Have you ever had suicidal thoughts?'];
-    
-    if (value === undefined || value === null || value === '') {
-        return false; // Convertir en booléen, pas en chaîne
-    }
-    
-    const strVal = value.toString().trim().toLowerCase();
-    
-    // IMPORTANT: Retourner un BOOLÉEN, pas une chaîne
-    return strVal === 'yes' || strVal === 'true' || strVal === '1' || strVal === 'oui';
-})(),
+                // CORRECTION : Variable non définie et logique incomplète
+                hasSuicidalThoughts: (function() {
+                    const value = row['Have you ever had suicidal thoughts ?'];
+                    console.log("DEBUG: Vérification des pensées suicidaires");
+                    console.log(`Étudiant ${row.id || index}: Valeur brute = "${value}"`);
+                    
+                    if (value === undefined || value === null || value === '') {
+                        console.log(`Étudiant ${row.id || index}: Valeur manquante, retourne false`);
+                        return false;
+                    }
+                    
+                    const strVal = value.toString().trim().toLowerCase();
+                    console.log(`Étudiant ${row.id || index}: Valeur normalisée = "${strVal}"`);
+                    
+                    if (strVal === 'yes' || strVal === 'true' || strVal === '1' || strVal === 'oui') {
+                        console.log(`Étudiant ${row.id || index}: RETOURNE TRUE (pensées suicidaires)`);
+                        return true;
+                    } else if (strVal === 'no' || strVal === 'false' || strVal === '0' || strVal === 'non') {
+                        console.log(`Étudiant ${row.id || index}: RETOURNE FALSE (pas de pensées suicidaires)`);
+                        return false;
+                    }
+                    
+                    console.log(`Étudiant ${row.id || index}: Valeur inconnue "${strVal}", retourne false par défaut`);
+                    return false;
+                })(),
                 work_study_hours: parseNumber(row['Work/Study Hours'] || row.work_study_hours, 8),
                 financial_stress: parseNumber(row['Financial Stress'] || row.financial_stress, 3),
                 family_history: (row['Family History of Mental Illness'] || '').toString().trim().toLowerCase() === 'yes',
                 depression: parseDepression(row.Depression || row.depression)
             };
             
-            // Normaliser les valeurs
-            processedRow.sleep_duration = Math.max(1, Math.min(5, processedRow.sleep_duration));
-            processedRow.dietary_habits = Math.max(1, Math.min(5, processedRow.dietary_habits));
+            // Normaliser les valeurs (déjà fait pour sleep_duration et dietary_habits)
             processedRow.cgpa = Math.max(0, Math.min(10, processedRow.cgpa));
             
             // Calculer le score de bien-être
@@ -124,9 +161,21 @@ function preprocessStudentData(rawData) {
             console.error(`Erreur lors du traitement de la ligne ${index}:`, error);
             console.error('Ligne problématique:', row);
             
-            // Retourner un objet par défaut
+            // Retourner un objet par défaut avec l'ID
             return {
-                
+                id: index + 1,
+                age: 20,
+                academic_pressure: 3,
+                cgpa: 5,
+                study_satisfaction: 3,
+                sleep_duration: 3,
+                dietary_habits: 3,
+                hasSuicidalThoughts: false,
+                work_study_hours: 8,
+                financial_stress: 3,
+                family_history: false,
+                depression: 0,
+                wellness_score: 50
             };
         }
     });
@@ -142,6 +191,51 @@ function preprocessStudentData(rawData) {
     
     console.log('Statistiques de dépression:', depressionStats);
     console.log(`Taux de dépression: ${(depressionStats.depressed / depressionStats.total * 100).toFixed(1)}%`);
+    
+    // Analyser les pensées suicidaires
+    const suicidalStats = {
+        total: processed.length,
+        suicidal: processed.filter(d => d.hasSuicidalThoughts === true).length,
+        suicidalAndDepressed: processed.filter(d => d.hasSuicidalThoughts === true && d.depression === 1).length
+    };
+    
+    console.log('Statistiques de pensées suicidaires:');
+    console.log(`- Total avec pensées suicidaires: ${suicidalStats.suicidal}/${suicidalStats.total} (${(suicidalStats.suicidal/suicidalStats.total*100).toFixed(1)}%)`);
+    console.log(`- Pensées suicidaires + dépression: ${suicidalStats.suicidalAndDepressed}/${suicidalStats.suicidal} (${suicidalStats.suicidal > 0 ? (suicidalStats.suicidalAndDepressed/suicidalStats.suicidal*100).toFixed(1) : 0}%)`);
+    
+    // Analyser les valeurs de sommeil
+    const sleepValues = processed.map(d => d.sleep_duration);
+    const sleepDistribution = {};
+    sleepValues.forEach(val => {
+        sleepDistribution[val] = (sleepDistribution[val] || 0) + 1;
+    });
+    
+    console.log('Distribution des valeurs de sommeil (1-5):');
+    Object.keys(sleepDistribution).sort().forEach(val => {
+        console.log(`  Score ${val}: ${sleepDistribution[val]} étudiants (${(sleepDistribution[val]/processed.length*100).toFixed(1)}%)`);
+    });
+    
+    console.log('=== TEST DES PREMIÈRES LIGNES ===');
+    for (let i = 0; i < Math.min(5, rawData.length); i++) {
+        const row = rawData[i];
+        console.log(`Ligne ${i}:`);
+        console.log('  - ID:', row.id);
+        console.log('  - Valeur brute de la colonne suicidaire:', row['Have you ever had suicidal thoughts ?']);
+        console.log('  - Valeur brute de sommeil:', row['Sleep Duration']);
+        console.log('  - Valeur brute d\'alimentation:', row['Dietary Habits']);
+    }
+    
+    // Afficher un échantillon des données traitées
+    console.log('=== ÉCHANTILLON DES DONNÉES TRAITÉES (5 premiers) ===');
+    for (let i = 0; i < Math.min(5, processed.length); i++) {
+        const student = processed[i];
+        console.log(`Étudiant ${student.id}:`);
+        console.log('  - Dépression:', student.depression);
+        console.log('  - Pensées suicidaires:', student.hasSuicidalThoughts);
+        console.log('  - Sommeil:', student.sleep_duration);
+        console.log('  - Alimentation:', student.dietary_habits);
+        console.log('  - Pression académique:', student.academic_pressure);
+    }
     
     return processed;
 }

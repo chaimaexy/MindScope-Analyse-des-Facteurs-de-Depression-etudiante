@@ -69,22 +69,6 @@
                 
                 <button id="reset-filters" class="reset-btn">Réinitialiser Filtres</button>
             </div>
-            
-            <!-- <div class="sidebar-stats">
-                <h3>STATISTIQUES GLOBALES</h3>
-                <div class="stat-item">
-                    <span class="stat-label">Étudiants</span>
-                    <span class="stat-value" id="total-students">0</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Taux Dépression</span>
-                    <span class="stat-value" id="depression-rate">0%</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Moyenne CGPA</span>
-                    <span class="stat-value" id="avg-cgpa">0.0</span>
-                </div>
-            </div> -->
         </aside>
 
         <!-- Main Content -->
@@ -118,19 +102,69 @@
                 </div>
             </div>
 
-            <!-- LIGNE 1: 3 Visualisations côte à côte -->
+            <!-- NOUVELLE ORGANISATION: LIGNE 1 - Carte de l'Inde + Facteurs de Risque -->
+            <div class="charts-grid double">
+                <!-- 5. Carte de l'Inde (maintenant en haut à gauche) -->
+                <div class="chart-card compact">
+                    <div class="card-header">
+                        <h3>Distribution Géographique (Inde)</h3>
+                        <div class="chart-controls">
+                            <select id="map-metric">
+                                <option value="depression">Taux de Dépression</option>
+                                <option value="cgpa">CGPA Moyen</option>
+                                <option value="satisfaction">Satisfaction Moyenne</option>
+                                <option value="count">Nombre d'Étudiants</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="us-map" class="chart-container small"></div>
+                    <div class="chart-footer">
+                        <div id="map-legend" class="compact-legend"></div>
+                    </div>
+                </div>
+
+                <!-- 4. Bar Chart Multivarié (à côté de la carte) -->
+                <div class="chart-card compact">
+                    <div class="card-header">
+                        <h3>Analyse des Facteurs de Risque</h3>
+                        <div class="chart-controls">
+                            <select id="bar-group">
+                                <option value="gender">Grouper par Genre</option>
+                                <option value="depression">Grouper par Dépression</option>
+                                <option value="city">Grouper par Ville</option>
+                            </select>
+                            <button id="toggle-stack" class="control-btn small">Empiler/Désempiler</button>
+                        </div>
+                    </div>
+                    <div id="multi-bar-chart" class="chart-container small"></div>
+                    <div class="chart-footer">
+                        <div id="bar-legend" class="compact-legend"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LIGNE 2: Les 3 autres visualisations -->
             <div class="charts-grid triple">
+
+                <!-- 3. Tableau des villes -->
+                <div class="chart-card compact">
+                    <div class="card-header">
+                        <h3>Performance par Ville</h3>
+                        <div class="chart-controls">
+                            <select id="table-sort">
+                                <option value="city">Trier par Ville</option>
+                                <option value="satisfaction">Trier par Satisfaction</option>
+                                <option value="cgpa">Trier par CGPA</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="city-table" class="table-container compact-table"></div>
+                </div>
+
                 <!-- 1. Pie Chart de Dépression -->
                 <div class="chart-card compact">
                     <div class="card-header">
                         <h3>Distribution de la Dépression</h3>
-                        <!-- <div class="chart-controls">
-                            <select id="pie-display">
-                                <option value="percentage">Pourcentages</option>
-                                <option value="count">Nombres absolus</option>
-                            </select>
-                            <button id="export-pie" class="export-btn small"><i class="fas fa-download" aria-hidden="true"></i></button>
-                        </div> -->
                     </div>
                     <div id="depression-pie" class="chart-container small"></div>
                     <div class="chart-footer">
@@ -152,108 +186,32 @@
                     </div>
                     <div id="radar-chart" class="chart-container small"></div>
                 </div>
+             </div>
 
-                <!-- 3. Tableau des villes -->
-                <div class="chart-card compact">
+
+            <!-- NOUVELLE SECTION: Graphique de Relation Détail (caché par défaut) -->
+            <!-- <div id="relationship-chart-section" class="chart-section hidden">
+                <div class="chart-card full-width">
                     <div class="card-header">
-                        <h3>Performance par Ville</h3>
+                        <h3 id="relationship-chart-title">Analyse Détail - <span id="selected-variable">Variable</span></h3> 
                         <div class="chart-controls">
-                            <select id="table-sort">
-                                <option value="city">Trier par Ville</option>
-                                <option value="satisfaction">Trier par Satisfaction</option>
-                                <option value="cgpa">Trier par CGPA</option>
-                            </select>
+                            <button id="close-relationship-chart" class="control-btn small">
+                               <i class="fas fa-times" aria-hidden="true" style="margin-right:6px"></i> Fermer 
+                            </button>
                         </div>
                     </div>
-                    <div id="city-table" class="table-container compact-table"></div>
-                </div>
-            </div>
-
-            <!-- LIGNE 2: 2 Visualisations -->
-            <div class="charts-grid double">
-                <!-- 4. Bar Chart Multivarié -->
-                <div class="chart-card compact">
-                    <div class="card-header">
-                        <h3>Analyse des Facteurs de Risque</h3>
-                        <div class="chart-controls">
-                            <select id="bar-group">
-                                <option value="gender">Grouper par Genre</option>
-                                <option value="depression">Grouper par Dépression</option>
-                                <option value="city">Grouper par Ville</option>
-                            </select>
-                            <button id="toggle-stack" class="control-btn small">Empiler/Désempiler</button>
-                        </div>
-                    </div>
-                    <div id="multi-bar-chart" class="chart-container small"></div>
+                    <div id="relationship-chart" class="chart-container medium"></div>
                     <div class="chart-footer">
-                        <div id="bar-legend" class="compact-legend"></div>
-                        <!-- <button id="export-bar" class="export-btn small">Exporter</button> -->
-                    </div>
-                </div>
-
-                <!-- 5. Carte de l'Inde -->
-                <div class="chart-card compact">
-                    <div class="card-header">
-                        <h3>Distribution Géographique (Inde)</h3>
-                        <div class="chart-controls">
-                            <select id="map-metric">
-                                <option value="depression">Taux de Dépression</option>
-                                <option value="cgpa">CGPA Moyen</option>
-                                <option value="satisfaction">Satisfaction Moyenne</option>
-                                <option value="count">Nombre d'Étudiants</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div id="us-map" class="chart-container small"></div>
-                    <div class="chart-footer">
-                        <div id="map-legend" class="compact-legend"></div>
-                        <!-- <button id="export-map" class="export-btn small">📥 Exporter</button> -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- SECTION: Insights Automatiques
-            <div class="chart-card full-width compact">
-                <div class="card-header">
-                    <h3>Insights Automatiques</h3>
-                    <div class="chart-controls">
-                        <select id="insight-type">
-                            <option value="correlations">Correlations</option>
-                            <option value="trends">Tendances</option>
-                            <option value="anomalies">Anomalies</option>
-                        </select>
-                    </div>
-                </div>
-                <div id="insights-container" class="insights-container compact">
-                    <div class="insight-card compact">
-                        <div class="insight-icon"><i class="fas fa-chart-pie" aria-hidden="true"></i></div>
-                        <div class="insight-content">
-                            <h4>Corrélations Clés</h4>
-                            <p id="correlation-text">Chargement des corrélations...</p>
-                        </div>
-                    </div>
-                    <div class="insight-card compact">
-                        <div class="insight-icon"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i></div>
-                        <div class="insight-content">
-                            <h4>Risques Identifiés</h4>
-                            <p id="risk-text">Analyse des risques en cours...</p>
-                        </div>
-                    </div>
-                    <div class="insight-card compact">
-                        <div class="insight-icon"><i class="fas fa-bullseye" aria-hidden="true"></i></div>
-                        <div class="insight-content">
-                            <h4>Recommandations</h4>
-                            <p id="recommendation-text">Génération des recommandations...</p>
-                        </div>
+                        <div id="relationship-legend" class="compact-legend"></div>
                     </div>
                 </div>
             </div> -->
+
 
             <!-- SECTION: Export et Rapport -->
             <div class="chart-footer full-width compact">
                 <div class="export-options compact">
                     <button id="generate-report" class="action-btn small">Exporter Dashboard Complet</button>
-                    <!-- <button id="share-insights" class="action-btn small">Partager Insights</button> -->
                 </div>
             </div>
 
@@ -276,9 +234,9 @@
     <script src="js/charts_dash/cityTable.js"></script>
     <script src="js/charts_dash/radarChart.js"></script>
     <script src="js/charts_dash/multiBarChart.js"></script>
+    <script src="js/charts_dash/relationshipChart.js"></script>
     <script src="js/charts_dash/indiaMap.js"></script>
     <script src="js/charts_dash/dashboardState.js"></script>
-    <!-- <script src="js/charts_dash/insights.js"></script> -->
     <!-- html2pdf for report export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.3/html2pdf.bundle.min.js"></script>
     <script src="js/report.js"></script>
