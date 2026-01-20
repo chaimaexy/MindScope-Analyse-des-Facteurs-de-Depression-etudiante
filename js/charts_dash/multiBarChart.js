@@ -2,11 +2,13 @@
 // Bar chart multivarié interactif 
 let barChartInitialized = false;
 let barChart = null;
+let lineChart = null; // AJOUT: Référence au graphique en ligne
 let groupBy = 'depression';
 let isStacked = false;
 let sortBy = 'none';
 let showValues = true;
 let selectedGroup = null; // Variable pour suivre le groupe sélectionné
+let selectedVariable = null; // AJOUT: Variable pour suivre la variable cliquée
 
 function initMultiBarChart() {
     if (barChartInitialized) return;
@@ -39,6 +41,39 @@ function initMultiBarChart() {
         margin
     };
     
+    // AJOUT: Créer un conteneur pour le graphique en ligne
+    // Vérifier si le conteneur existe déjà (au cas où relationshipChart.js aurait déjà créé quelque chose)
+    let lineChartContainer = container.select('#multi-bar-line-chart-container');
+    if (lineChartContainer.empty()) {
+        lineChartContainer = container
+            .append('div')
+            .attr('id', 'multi-bar-line-chart-container')
+            .style('display', 'none')
+            .style('margin-top', '20px')
+            .style('padding', '15px')
+            .style('background', '#f8fafc')
+            .style('border-radius', '8px')
+            .style('border', '1px solid #e2e8f0');
+    }
+    
+    // AJOUT: Créer le SVG pour le graphique en ligne
+    let lineSvg = lineChartContainer.select('.relationship-line-chart');
+    if (lineSvg.empty()) {
+        lineSvg = lineChartContainer
+            .append('svg')
+            .attr('width', width)
+            .attr('height', 200)
+            .attr('class', 'relationship-line-chart');
+    }
+    
+    lineChart = {
+        container: lineChartContainer,
+        svg: lineSvg,
+        width,
+        height: 200,
+        margin: { top: 40, right: 30, bottom: 50, left: 60 }
+    };
+    
     // Événements de contrôle améliorés
     setupEnhancedControls();
     
@@ -58,7 +93,7 @@ function initMultiBarChart() {
                     habitudes alimentaires, stress financier) entre groupes.
                 </div>
                 <br/>
-                <div style="font-size:12px; color:#64748b;">Cliquez sur une barre pour filtrer le tableau.</div>
+                <div style="font-size:12px; color:#64748b;">Cliquez sur une barre pour voir la relation avec le niveau de dépression.</div>
             `
         });
     }
@@ -81,6 +116,7 @@ function setupEnhancedControls() {
         groupSelect.addEventListener('change', function() {
             groupBy = this.value;
             selectedGroup = null; // Réinitialiser la sélection lors du changement de groupe
+            selectedVariable = null; // AJOUT: Réinitialiser la variable sélectionnée
             sortBy = 'none'; // Réinitialiser le tri
             updateMultiBarChart();
         });
@@ -102,6 +138,9 @@ function setupEnhancedControls() {
 function updateMultiBarChart() {
     // Cacher tous les tooltips avant la mise à jour
     hideAllTooltips();
+    
+    // AJOUT: Réinitialiser le graphique en ligne
+    resetLineChart();
     
     if (!barChartInitialized || !barChart) return;
     
@@ -394,33 +433,6 @@ function drawStackedBars(g, barData, variables, labels, colors, x0, y, chartHeig
                 })
                 .style('filter', 'none');
         })
-        // Dans la fonction drawGroupedBars, modifier l'événement click pour les barres individuelles
-        .on('click', function(event, d) {
-            event.preventDefault();
-            event.stopPropagation();
-            
-            // Stocker la variable cliquée
-            const variable = variables[i];
-            
-            // Afficher le graphique de relation
-            if (typeof showRelationshipChart === 'function') {
-                showRelationshipChart(variable);
-            }
-        })
-
-        // Ajouter aussi dans drawStackedBars pour les barres empilées
-        .on('click', function(event, d) {
-            event.preventDefault();
-            event.stopPropagation();
-            
-            const variable = d.key;
-            
-            // Afficher le graphique de relation
-            if (typeof showRelationshipChart === 'function') {
-                showRelationshipChart(variable);
-            }
-        })
-
         .on('click', function(event, d) {
             event.preventDefault();
             event.stopPropagation();
@@ -428,12 +440,31 @@ function drawStackedBars(g, barData, variables, labels, colors, x0, y, chartHeig
             const variable = d.key;
             console.log('Barre empilée cliquée:', variable);
             
-            // Afficher le graphique de relation
-            if (typeof showRelationshipChart === 'function') {
-                console.log('Appel de showRelationshipChart avec:', variable);
-                showRelationshipChart(variable);
-            } else {
-                console.error('showRelationshipChart non disponible');
+            // AJOUT: Afficher le graphique de relation
+            showMultiBarRelationshipChart(variable);
+            
+            // Conserver l'ancienne logique de sélection de groupe (optionnel)
+            if (event.shiftKey || event.ctrlKey) {
+                const group = d.data.group;
+                
+                // Si on clique sur un groupe déjà sélectionné, désélectionner
+                if (selectedGroup === group) {
+                    selectedGroup = null;
+                    // Réinitialiser le filtre
+                    if (typeof handleSelection === 'function') {
+                        handleSelection(getSelectionTypeFromGroup(group), null);
+                    }
+                } else {
+                    // Sinon, sélectionner ce groupe
+                    selectedGroup = group;
+                    // Appliquer le filtre correspondant
+                    if (typeof handleSelection === 'function') {
+                        handleSelection(getSelectionTypeFromGroup(group), getSelectionValueFromGroup(group));
+                    }
+                }
+                
+                // Re-dessiner le graphique avec la nouvelle sélection
+                updateMultiBarChart();
             }
         });
     
@@ -559,25 +590,34 @@ function drawGroupedBars(g, barData, variables, labels, colors, x0, y, chartHeig
                 event.stopPropagation();
                 
                 const group = d.group;
+                const variable = variables[i];
                 
-                // Si on clique sur un groupe déjà sélectionné, désélectionner
-                if (selectedGroup === group) {
-                    selectedGroup = null;
-                    // Réinitialiser le filtre
-                    if (typeof handleSelection === 'function') {
-                        handleSelection(getSelectionTypeFromGroup(group), null);
+                console.log('Barre cliquée:', group, variable);
+                
+                // AJOUT: Afficher le graphique de relation
+                showMultiBarRelationshipChart(variable);
+                
+                // Conserver l'ancienne logique de sélection de groupe (optionnel)
+                if (event.shiftKey || event.ctrlKey) {
+                    // Si on clique sur un groupe déjà sélectionné, désélectionner
+                    if (selectedGroup === group) {
+                        selectedGroup = null;
+                        // Réinitialiser le filtre
+                        if (typeof handleSelection === 'function') {
+                            handleSelection(getSelectionTypeFromGroup(group), null);
+                        }
+                    } else {
+                        // Sinon, sélectionner ce groupe
+                        selectedGroup = group;
+                        // Appliquer le filtre correspondant
+                        if (typeof handleSelection === 'function') {
+                            handleSelection(getSelectionTypeFromGroup(group), getSelectionValueFromGroup(group));
+                        }
                     }
-                } else {
-                    // Sinon, sélectionner ce groupe
-                    selectedGroup = group;
-                    // Appliquer le filtre correspondant
-                    if (typeof handleSelection === 'function') {
-                        handleSelection(getSelectionTypeFromGroup(group), getSelectionValueFromGroup(group));
-                    }
+                    
+                    // Re-dessiner le graphique avec la nouvelle sélection
+                    updateMultiBarChart();
                 }
-                
-                // Re-dessiner le graphique avec la nouvelle sélection
-                updateMultiBarChart();
             });
         
         // Ajouter les valeurs sur les barres
@@ -599,6 +639,393 @@ function drawGroupedBars(g, barData, variables, labels, colors, x0, y, chartHeig
             });
         }
     });
+}
+
+// AJOUT: Fonction pour afficher le graphique de relation (renommée pour éviter les conflits)
+function showMultiBarRelationshipChart(variable) {
+    console.log('Affichage du graphique de relation (multiBar):', variable);
+    
+    // Mettre à jour la variable sélectionnée
+    selectedVariable = variable;
+    
+    // Récupérer les données filtrées
+    const data = getFilteredData();
+    console.log('Données filtrées pour le graphique en ligne:', data.length, 'éléments');
+    
+    // Préparer les données pour le graphique en ligne
+    const lineData = prepareLineChartData(data, variable);
+    console.log('Données préparées pour le graphique en ligne:', lineData);
+    
+    // Vérifier si lineChart est défini
+    if (!lineChart || !lineChart.container) {
+        console.error('lineChart ou lineChart.container non défini');
+        return;
+    }
+    
+    // Afficher le conteneur
+    lineChart.container.style('display', 'block');
+    console.log('Conteneur du graphique en ligne affiché');
+    
+    // Dessiner le graphique en ligne
+    drawLineChart(lineData, variable);
+    
+    // Ajouter un bouton pour fermer le graphique
+    addCloseButton();
+}
+
+// AJOUT: Fonction pour préparer les données du graphique en ligne
+function prepareLineChartData(data, variable) {
+    // Créer des bins pour la variable (groupes de valeurs)
+    const bins = {};
+    
+    console.log('Préparation des données pour variable:', variable);
+    
+    // Pour chaque point de donnée
+    data.forEach(d => {
+        // Vérifier si la variable existe dans les données
+        if (d[variable] === undefined || d[variable] === null) {
+            return; // Ignorer les valeurs manquantes
+        }
+        
+        // Arrondir la valeur de la variable pour créer des groupes
+        // Pour sleep_duration (heures), on arrondit à l'entier le plus proche
+        // Pour les autres variables (1-5), on arrondit à 1 décimale
+        let value;
+        if (variable === 'sleep_duration') {
+            value = Math.round(d[variable]); // Arrondir à l'entier pour le sommeil
+        } else {
+            value = Math.round(d[variable] * 10) / 10; // Arrondir à 1 décimale
+        }
+        
+        if (!bins[value]) {
+            bins[value] = {
+                variableValue: value,
+                depressionValues: [],
+                count: 0
+            };
+        }
+        
+        // Ajouter le niveau de dépression (0 ou 1)
+        if (d.depression !== undefined && d.depression !== null) {
+            bins[value].depressionValues.push(d.depression);
+            bins[value].count++;
+        }
+    });
+    
+    console.log('Bins créés:', Object.keys(bins).length);
+    
+    // Calculer la moyenne de dépression pour chaque bin
+    const result = Object.values(bins)
+        .map(bin => ({
+            x: bin.variableValue,
+            y: bin.depressionValues.length > 0 ? d3.mean(bin.depressionValues) * 100 : 0, // Pourcentage de dépression
+            count: bin.count
+        }))
+        .filter(item => item.count > 0) // Filtrer les bins vides
+        .sort((a, b) => a.x - b.x); // Trier par valeur de variable
+    
+    console.log('Résultat final:', result);
+    return result;
+}
+
+// AJOUT: Fonction pour dessiner le graphique en ligne
+function drawLineChart(lineData, variable) {
+    console.log('Dessin du graphique en ligne avec', lineData.length, 'points');
+    
+    if (!lineChart || lineData.length === 0) {
+        // Afficher un message si pas de données
+        lineChart.svg.selectAll('*').remove();
+        lineChart.svg.append('text')
+            .attr('x', lineChart.width / 2)
+            .attr('y', lineChart.height / 2)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '14px')
+            .style('fill', '#64748b')
+            .text('Données insuffisantes pour afficher la relation');
+        return;
+    }
+    
+    // Nettoyer le SVG
+    lineChart.svg.selectAll('*').remove();
+    
+    // Dimensions du graphique
+    const chartWidth = lineChart.width - lineChart.margin.left - lineChart.margin.right;
+    const chartHeight = lineChart.height - lineChart.margin.top - lineChart.margin.bottom;
+    
+    // Groupe principal
+    const g = lineChart.svg.append('g')
+        .attr('transform', `translate(${lineChart.margin.left}, ${lineChart.margin.top})`);
+    
+    // Échelles
+    const x = d3.scaleLinear()
+        .domain([d3.min(lineData, d => d.x) - 0.5, d3.max(lineData, d => d.x) + 0.5])
+        .range([0, chartWidth])
+        .nice();
+    
+    const yMax = d3.max(lineData, d => d.y);
+    const y = d3.scaleLinear()
+        .domain([0, Math.max(100, yMax * 1.1)])
+        .range([chartHeight, 0])
+        .nice();
+    
+    // Ligne
+    const line = d3.line()
+        .x(d => x(d.x))
+        .y(d => y(d.y))
+        .curve(d3.curveMonotoneX);
+    
+    // Grille
+    g.append('g')
+        .attr('class', 'grid')
+        .call(d3.axisLeft(y)
+            .tickSize(-chartWidth)
+            .tickFormat('')
+        )
+        .style('stroke', '#e2e8f0')
+        .style('stroke-width', 0.5)
+        .style('stroke-dasharray', '2,2');
+    
+    // Ligne du graphique
+    g.append('path')
+        .datum(lineData)
+        .attr('fill', 'none')
+        .attr('stroke', '#3b82f6')
+        .attr('stroke-width', 3)
+        .attr('d', line);
+    
+    // Points
+    g.selectAll('.point')
+        .data(lineData)
+        .enter()
+        .append('circle')
+        .attr('class', 'point')
+        .attr('cx', d => x(d.x))
+        .attr('cy', d => y(d.y))
+        .attr('r', d => Math.min(Math.sqrt(d.count) * 1.5 + 3, 10)) // Taille proportionnelle au nombre d'observations
+        .attr('fill', '#3b82f6')
+        .attr('stroke', 'white')
+        .attr('stroke-width', 2)
+        .style('cursor', 'pointer')
+        .on('mouseover', function(event, d) {
+            showLineTooltip(event, d, variable);
+        })
+        .on('mouseleave', function() {
+            hideLineTooltip();
+        });
+    
+    // Axe X
+    g.append('g')
+        .attr('class', 'x-axis')
+        .attr('transform', `translate(0, ${chartHeight})`)
+        .call(d3.axisBottom(x).tickFormat(d => {
+            if (variable === 'sleep_duration') {
+                return d + 'h'; // Format heures pour le sommeil
+            }
+            return d.toFixed(variable === 'sleep_duration' ? 0 : 1); // Format avec précision appropriée
+        }))
+        .style('font-size', '11px')
+        .style('color', '#64748b');
+    
+    // Axe Y
+    g.append('g')
+        .attr('class', 'y-axis')
+        .call(d3.axisLeft(y).tickFormat(d => d + '%'))
+        .style('font-size', '11px')
+        .style('color', '#64748b');
+    
+    // Titre de l'axe X
+    g.append('text')
+        .attr('class', 'axis-label')
+        .attr('x', chartWidth / 2)
+        .attr('y', chartHeight + 35)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '12px')
+        .style('fill', '#475569')
+        .style('font-weight', '600')
+        .text(getVariableLabel(variable));
+    
+    // Titre de l'axe Y
+    g.append('text')
+        .attr('class', 'axis-label')
+        .attr('transform', 'rotate(-90)')
+        .attr('y', -45)
+        .attr('x', -chartHeight / 2)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '12px')
+        .style('fill', '#475569')
+        .style('font-weight', '600')
+        .text('Taux de dépression (%)');
+    
+    // Titre du graphique
+    g.append('text')
+        .attr('class', 'chart-title')
+        .attr('x', chartWidth / 2)
+        .attr('y', -15)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '14px')
+        .style('fill', '#1e293b')
+        .style('font-weight', '700')
+        .text(`Relation entre ${getVariableLabel(variable).split(' (')[0]} et dépression`);
+    
+    // Ajouter une ligne de régression
+    addRegressionLine(g, lineData, x, y, chartWidth, chartHeight);
+}
+
+// AJOUT: Fonction pour obtenir le label d'une variable
+function getVariableLabel(variable) {
+    const labels = {
+        'academic_pressure': 'Pression Académique (1-5)',
+        'sleep_duration': 'Durée de Sommeil (heures)',
+        'dietary_habits': 'Habitudes Alimentaires (1-5)',
+        'financial_stress': 'Stress Financier (1-5)'
+    };
+    return labels[variable] || variable;
+}
+
+// AJOUT: Fonction pour ajouter une ligne de régression
+function addRegressionLine(g, lineData, xScale, yScale, width, height) {
+    if (lineData.length < 2) return;
+    
+    // Calculer la régression linéaire simple
+    const n = lineData.length;
+    const sumX = d3.sum(lineData, d => d.x);
+    const sumY = d3.sum(lineData, d => d.y);
+    const sumXY = d3.sum(lineData, d => d.x * d.y);
+    const sumX2 = d3.sum(lineData, d => d.x * d.x);
+    
+    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+    
+    // Créer les points pour la ligne de régression
+    const xRange = xScale.domain();
+    const regressionData = [
+        { x: xRange[0], y: slope * xRange[0] + intercept },
+        { x: xRange[1], y: slope * xRange[1] + intercept }
+    ];
+    
+    // Dessiner la ligne de régression
+    const regressionLine = d3.line()
+        .x(d => xScale(d.x))
+        .y(d => yScale(d.y));
+    
+    g.append('path')
+        .datum(regressionData)
+        .attr('fill', 'none')
+        .attr('stroke', '#ef4444')
+        .attr('stroke-width', 1.5)
+        .attr('stroke-dasharray', '5,5')
+        .attr('d', regressionLine);
+    
+    // Ajouter la légende pour la ligne de régression
+    const slopeText = slope > 0 ? `+${slope.toFixed(2)}` : slope.toFixed(2);
+    g.append('text')
+        .attr('x', width - 10)
+        .attr('y', 20)
+        .attr('text-anchor', 'end')
+        .style('font-size', '10px')
+        .style('fill', '#ef4444')
+        .style('font-weight', '500')
+        .text(`Tendance: ${slopeText}% par unité`);
+}
+
+// AJOUT: Fonction pour afficher le tooltip du graphique en ligne
+function showLineTooltip(event, data, variable) {
+    const tooltip = createLineTooltip();
+    
+    tooltip
+        .style('display', 'block')
+        .style('left', (event.pageX + 15) + 'px')
+        .style('top', (event.pageY - 15) + 'px')
+        .html(`
+            <div class="tooltip-container" style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 250px;">
+                <div class="tooltip-header" style="padding: 12px; background: #3b82f6; color: white; border-radius: 8px 8px 0 0;">
+                    <strong style="font-size: 13px;">${getVariableLabel(variable).split(' (')[0]} = ${data.x}${variable === 'sleep_duration' ? 'h' : ''}</strong>
+                </div>
+                <div class="tooltip-body" style="padding: 12px;">
+                    <div style="margin-bottom: 8px;">
+                        <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">Taux de dépression</div>
+                        <div style="font-size: 20px; color: #3b82f6; font-weight: 700;">${data.y.toFixed(1)}%</div>
+                    </div>
+                    <div style="font-size: 11px; color: #64748b; padding: 6px; background: #f8fafc; border-radius: 4px;">
+                        <i class="fas fa-users" style="margin-right: 4px;"></i>
+                        ${data.count} observation${data.count > 1 ? 's' : ''}
+                    </div>
+                </div>
+            </div>
+        `);
+}
+
+// AJOUT: Fonction pour créer le tooltip du graphique en ligne
+function createLineTooltip() {
+    let tooltip = d3.select('#multi-bar-line-tooltip');
+    
+    if (tooltip.empty()) {
+        tooltip = d3.select('body')
+            .append('div')
+            .attr('id', 'multi-bar-line-tooltip')
+            .style('position', 'absolute')
+            .style('background', 'white')
+            .style('border', '1px solid #e2e8f0')
+            .style('border-radius', '8px')
+            .style('box-shadow', '0 4px 12px rgba(0,0,0,0.1)')
+            .style('z-index', '1000')
+            .style('pointer-events', 'none')
+            .style('display', 'none')
+            .style('font-family', 'system-ui, sans-serif');
+    }
+    
+    return tooltip;
+}
+
+// AJOUT: Fonction pour cacher le tooltip du graphique en ligne
+function hideLineTooltip() {
+    d3.select('#multi-bar-line-tooltip')
+        .style('display', 'none');
+}
+
+// AJOUT: Fonction pour ajouter un bouton de fermeture
+function addCloseButton() {
+    // Retirer le bouton existant s'il y en a un
+    lineChart.container.select('.close-line-chart').remove();
+    
+    // Ajouter le bouton
+    const closeButton = lineChart.container
+        .append('button')
+        .attr('class', 'close-line-chart')
+        .style('position', 'absolute')
+        .style('top', '10px')
+        .style('right', '10px')
+        .style('padding', '6px 12px')
+        .style('background', '#ef4444')
+        .style('color', 'white')
+        .style('border', 'none')
+        .style('border-radius', '4px')
+        .style('cursor', 'pointer')
+        .style('font-size', '12px')
+        .style('font-weight', '600')
+        .style('z-index', '10')
+        .html('<i class="fas fa-times" style="margin-right:4px"></i>Fermer')
+        .on('click', function() {
+            hideLineChart();
+        });
+}
+
+// AJOUT: Fonction pour cacher le graphique en ligne
+function hideLineChart() {
+    if (lineChart) {
+        lineChart.container.style('display', 'none');
+        selectedVariable = null;
+        console.log('Graphique en ligne caché');
+    }
+}
+
+// AJOUT: Fonction pour réinitialiser le graphique en ligne
+function resetLineChart() {
+    if (lineChart) {
+        lineChart.container.style('display', 'none');
+        selectedVariable = null;
+        console.log('Graphique en ligne réinitialisé');
+    }
 }
 
 function showEnhancedTooltip(event, data) {
@@ -694,6 +1121,7 @@ function hideAllTooltips() {
     d3.select('#enhanced-bar-tooltip').style('display', 'none');
     d3.select('#tooltip').style('display', 'none');
     d3.select('#india-state-tooltip').style('display', 'none');
+    d3.select('#multi-bar-line-tooltip').style('display', 'none'); // AJOUT
 }
 
 function getRiskLevel(value, variable) {
@@ -795,20 +1223,11 @@ function updateEnhancedLegend(barData, variables, labels, colors) {
                 event.preventDefault();
                 event.stopPropagation();
                 
-                console.log('Bouton réinitialiser cliqué');
+                console.log('Légende cliquée:', variable);
                 
-                // Appeler la fonction de réinitialisation
-                resetBarChartSelection();
-                
-                // Feedback visuel
-                d3.select(this)
-                    .style('background', '#10b981')
-                    .style('color', 'white')
-                    .transition()
-                    .duration(300)
-                    .style('background', '#f1f5f9')
-                    .style('color', '#475569');
-            })
+                // Afficher le graphique de relation lorsqu'on clique sur la légende
+                showMultiBarRelationshipChart(variable);
+            });
         
         legendItem
             .append('div')
@@ -856,17 +1275,6 @@ function updateEnhancedLegend(barData, variables, labels, colors) {
         .style('font-size', '11px')
         .style('color', '#64748b');
     
-  /*  modeLegend.html(`
-        <div style="display: flex; align-items: center; gap: 4px;">
-            <div style="width: 8px; height: 8px; background: #3b82f6; border-radius: 2px;"></div>
-            <span>Groupé</span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 4px; margin-left: 12px;">
-            <div style="width: 8px; height: 8px; background: linear-gradient(to right, #3b82f6, #10b981, #f59e0b, #ef4444); border-radius: 2px;"></div>
-            <span>Empilé</span>
-        </div>
-    `);*/
-    
     // BOUTON DE RÉINITIALISATION - CORRIGÉ
     if (selectedGroup) {
         const resetButton = actionsRow
@@ -906,18 +1314,22 @@ function updateEnhancedLegend(barData, variables, labels, colors) {
                 
                 console.log('Bouton réinitialiser cliqué', selectedGroup);
                 
-                // Réinitialiser la sélection - MÊME LOGIQUE QUE LE CLICK SUR LA BARRE
+                // Réinitialiser la sélection
                 selectedGroup = null;
+                selectedVariable = null;
                 
-                // Réinitialiser le filtre si la fonction existe - MÊME QUE LE CLICK SUR BARRE
+                // Réinitialiser le filtre si la fonction existe
                 if (typeof handleSelection === 'function') {
-                    // Utiliser null pour les deux paramètres comme dans le click sur barre
+                    // Utiliser null pour les deux paramètres
                     handleSelection(null, null);
                 } else {
                     console.warn('handleSelection non disponible');
                 }
                 
-                // Forcer une mise à jour complète - MÊME QUE LE CLICK SUR BARRE
+                // Réinitialiser le graphique en ligne
+                resetLineChart();
+                
+                // Forcer une mise à jour complète
                 updateMultiBarChart();
                 
                 // Feedback visuel
@@ -937,12 +1349,12 @@ function updateEnhancedLegend(barData, variables, labels, colors) {
                 }
             });
         
-     /*   resetButton.html(`
+        resetButton.html(`
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
             </svg>
             Réinitialiser (${selectedGroup})
-        `);*/
+        `);
         
         // Ajouter un attribut tabindex pour l'accessibilité
         resetButton.attr('tabindex', '0');
@@ -961,13 +1373,13 @@ function updateEnhancedLegend(barData, variables, labels, colors) {
             .style('font-size', '12px')
             .style('font-weight', '500');
         
-      /*  stateInfo.html(`
+        stateInfo.html(`
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2">
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                 <polyline points="22 4 12 14.01 9 11.01"></polyline>
             </svg>
             Affichage par défaut (${groupBy === 'depression' ? 'Déprimés ↔ Non déprimés' : 'Hommes ↔ Femmes'})
-        `);*/
+        `);
     }
 }
 
@@ -1116,10 +1528,14 @@ function getSelectionValueFromGroup(group) {
 function resetBarChartToDefault() {
     // Réinitialiser toutes les variables
     selectedGroup = null;
+    selectedVariable = null; // AJOUT
     groupBy = 'depression';
     isStacked = false;
     sortBy = 'none';
     showValues = true;
+    
+    // AJOUT: Réinitialiser le graphique en ligne
+    resetLineChart();
     
     // Mettre à jour les contrôles UI
     const groupSelect = document.getElementById('bar-group');
@@ -1161,12 +1577,12 @@ function resetBarChartToDefault() {
 }
 
 // Fonction pour réinitialiser uniquement la sélection
-// Fonction pour réinitialiser uniquement la sélection - SIMPLIFIÉE
 function resetBarChartSelection() {
     console.log('resetBarChartSelection appelée');
     
     // Réinitialiser la sélection
     selectedGroup = null;
+    selectedVariable = null; // AJOUT: Réinitialiser la variable sélectionnée
     
     // Réinitialiser le filtre si la fonction existe
     if (typeof handleSelection === 'function') {
@@ -1176,6 +1592,9 @@ function resetBarChartSelection() {
         console.warn('handleSelection non disponible');
     }
     
+    // AJOUT: Réinitialiser le graphique en ligne
+    resetLineChart();
+    
     // Forcer un redessin
     if (barChartInitialized && barChart) {
         console.log('Mise à jour du graphique');
@@ -1183,8 +1602,11 @@ function resetBarChartSelection() {
     }
 }
 
-// Exposer les fonctions
+// Exposer les fonctions avec des noms uniques
 window.initMultiBarChart = initMultiBarChart;
 window.updateMultiBarChart = updateMultiBarChart;
 window.resetBarChartSelection = resetBarChartSelection;
 window.resetBarChartToDefault = resetBarChartToDefault;
+window.showMultiBarRelationshipChart = showMultiBarRelationshipChart;
+window.hideMultiBarLineChart = hideLineChart;
+window.resetMultiBarLineChart = resetLineChart;
